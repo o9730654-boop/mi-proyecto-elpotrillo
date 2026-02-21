@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Mesas Interactivo</title>
+    <style>
+        /* --- DISEÑO (CSS) --- */
+        :root {
+            --disponible: #2ecc71;
+            --ocupada: #e74c3c;
+            --reservada: #f1c40f;
+            --fondo: #f0f2f5;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: var(--fondo);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 { color: #2c3e50; }
+
+        /* Contenedor de las 8 mesas */
+        .floor-plan {
+            display: grid;
+            /* 4 columnas de igual tamaño */
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            max-width: 800px;
+            margin-top: 20px;
+        }
+
+        /* Estilo de cada mesa */
+        .mesa {
+            width: 120px;
+            height: 120px;
+            background-color: white;
+            border: 5px solid #ccc;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .mesa:hover { transform: scale(1.05); }
+
+        /* Colores dinámicos según el estado */
+        .mesa[data-status="disponible"] { border-color: var(--disponible); color: var(--disponible); }
+        .mesa[data-status="ocupada"] { border-color: var(--ocupada); color: var(--ocupada); }
+        .mesa[data-status="reservada"] { border-color: var(--reservada); color: var(--reservada); }
+
+        .mesa-number { font-size: 2rem; font-weight: bold; }
+        .mesa-status { font-size: 0.7rem; text-transform: uppercase; font-weight: bold; }
+
+        /* Botón de Reset */
+        #btn-reset {
+            margin-top: 30px;
+            padding: 10px 20px;
+            background-color: #34495e;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #btn-reset:hover { background-color: #2c3e50; }
+
+        /* Responsivo: 2 columnas en celulares */
+        @media (max-width: 600px) {
+            .floor-plan { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Mapa de Mesas - Restaurante</h1>
+
+    <div class="floor-plan" id="mapa">
+        <div class="mesa" data-id="1" data-status="disponible">
+            <span class="mesa-number">1</span>
+            <span class="mesa-status">disponible</span>
+        </div>
+        <div class="mesa" data-id="2" data-status="disponible">
+            <span class="mesa-number">2</span>
+            <span class="mesa-status">disponible</span>
+        </div>
+        <div class="mesa" data-id="3" data-status="disponible">
+            <span class="mesa-number">3</span>
+            <span class="mesa-status">disponible</span>
+        </div>
+        <div class="mesa" data-id="4" data-status="disponible">
+            <span class="mesa-number">4</span>
+            <span class="mesa-status">disponible</span>
+        </div>
+        <div class="mesa" data-id="5" data-status="disponible">
+            <span class="mesa-number">5</span>
+            <span class="mesa-status">disponible</span>
+        </div>
+        <div class="mesa" data-id="6" data-status="disponible">
+            <span class="mesa-number">6</span>
+            <span class="mesa-status">disponible</span>
+        </div>
+        <div class="mesa" data-id="7" data-status="disponible">
+            <span class="mesa-number">7</span>
+            <span class="mesa-status">disponible</span>
+        </div>
+        <div class="mesa" data-id="8" data-status="disponible">
+            <span class="mesa-number">8</span>
+            <span class="mesa-status">disponible</span>
+        </div>
+        <div style="margin-top: 30px; text-align: center;">
+    <a href="/menu" style="text-decoration: none; color: #007bff; font-weight: bold;">↩️ Volver al Menú Principal</a>
+</div>
+    </div>
+
+    <button id="btn-reset">Limpiar todas las mesas</button>
+
+    <script>
+        /* --- LÓGICA (JAVASCRIPT) --- */
+        document.addEventListener('DOMContentLoaded', () => {
+            const mesas = document.querySelectorAll('.mesa');
+            const btnReset = document.getElementById('btn-reset');
+
+            // 1. Cargar estados guardados al iniciar
+            mesas.forEach(mesa => {
+                const id = mesa.getAttribute('data-id');
+                const estadoGuardado = localStorage.getItem(`mesa_${id}`);
+                
+                if (estadoGuardado) {
+                    actualizarInterfaz(mesa, estadoGuardado);
+                }
+
+                // 2. Evento Click para cambiar estado
+                mesa.addEventListener('click', () => {
+                    const estados = ['disponible', 'ocupada', 'reservada'];
+                    let actual = mesa.getAttribute('data-status');
+                    let siguiente = estados[(estados.indexOf(actual) + 1) % estados.length];
+                    
+                    actualizarInterfaz(mesa, siguiente);
+                    localStorage.setItem(`mesa_${id}`, siguiente); // Guardar cambio
+                });
+            });
+
+            // 3. Función del botón Reset
+            btnReset.addEventListener('click', () => {
+                if(confirm("¿Restablecer todas las mesas a disponible?")) {
+                    mesas.forEach(mesa => {
+                        actualizarInterfaz(mesa, 'disponible');
+                        localStorage.setItem(`mesa_${mesa.dataset.id}`, 'disponible');
+                    });
+                }
+            });
+        });
+
+        // Función auxiliar para cambiar el texto y atributo visual
+        function actualizarInterfaz(elemento, estado) {
+            elemento.setAttribute('data-status', estado);
+            elemento.querySelector('.mesa-status').innerText = estado;
+        }
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Menú - Café / Restaurante</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='12341.css') }}" />
+</head>
+<body>
+
+<header class="site-header">
+    <div class="container header-inner">
+        <h1 class="logo">El Potrillo - Menú</h1>
+        <nav class="main-nav" aria-label="Navegación principal">
+            <a href="#Comida">Comida</a>
+            <a href="#Bebida">Bebidas</a>
+            <a href="#Licuados">Licuados</a>
+            <a href="/mesas" class="nav-link">🪑 Mesas</a>
+            <a href="/cocina" class="nav-link">👨‍🍳 Pantalla de Cocina</a>
+            <a onclick="window.location.href = '/reporte';" class="report-link" style="cursor:pointer;">📊 Reporte de Ventas</a>
+            <a href="#" onclick="logout()">🚪 Cerrar Sesión</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container layout">
+    <section id="menu" class="menu-grid" aria-label="Lista de platillos"></section>
+
+    <aside class="cart" aria-label="Carrito de orden">
+    <h3>🛒 Mi Orden</h3>
+    <ul id="cart-items"></ul>
+    <div class="cart-total">
+        <strong>Total:</strong> $<span id="cart-total">0.00</span>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+    <button type="button" class="btn" onclick="window.finalizarVenta('Efectivo')">💵 Efectivo</button>
+    <button type="button" class="btn" onclick="window.finalizarVenta('Tarjeta')">💳 Tarjeta</button>
+    </div>
+    </aside>
+</main>
+
+<footer>
+    <div class="container">
+    <p>© <span id="year"></span> El Potrillo — Menú digital</p>
+    </div>
+</footer>
+
+<script>
+    // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN
+    async function fetchWithToken(url, options = {}) {
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            alert('Error de sesión. Inicia sesión de nuevo.');
+            window.location.href = '/';
+            return null;
+        }
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            ...options.headers
+        };
+
+        const response = await fetch(url, {
+            ...options,
+            headers
+        });
+
+        if (response.status === 401) {
+            alert('Sesión expirada. Por favor inicia sesión de nuevo.');
+            localStorage.removeItem('token');
+            window.location.href = '/';
+            return null;
+        }
+
+        return response;
+    }
+
+    function logout() {
+        localStorage.removeItem('token'); 
+        alert('Sesión cerrada.');
+        window.location.href = '/'; 
+    }
+
+    async function loadMenu() {
+        try {
+            const response = await fetch('/api/menu');
+            if (!response.ok) {
+                const errorData = await response.json(); 
+                throw new Error(errorData.message || 'Error desconocido.');
+            }
+            const data = await response.json();
+            return data.map(item => ({
+                name: item.Mnu_nombre_plato,   
+                desc: item.Mnu_descripcion,    
+                price: item.Mnu_precio,        
+                category: classifyCategory(item.Mnu_nombre_plato) 
+            }));
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al cargar el menú: ' + error.message);
+            return []; 
+        }
+    }
+
+    function classifyCategory(name) {
+        if (name.includes('Huevo') || name.includes('Tortas') || name.includes('Chilaquiles') || name.includes('Sándwiches')) return 'Comida';
+        if (name.includes('Café') || name.includes('Chocomilk')) return 'Bebida caliente'; 
+        if (name.includes('Licuado')) return 'Licuados';
+        if (name.includes('Refresco') || name.includes('Jamaica') || name.includes('Limonada')) return 'Bebida';
+        return 'Comida'; 
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const items = await loadMenu(); 
+        const grouped = items.reduce((acc, item) => {
+            if (!acc[item.category]) acc[item.category] = [];
+            acc[item.category].push(item);
+            return acc;
+        }, {});
+
+        const menuEl = document.getElementById('menu');
+        const order = ['Comida', 'Bebida caliente', 'Licuados', 'Bebida']; 
+        menuEl.innerHTML = ''; 
+
+        order.forEach(cat => {
+            const list = grouped[cat];
+            if (!list) return;
+            const section = document.createElement('section');
+            section.className = 'category-section';
+            section.id = cat.replace(' ', ''); 
+            const h = document.createElement('h3');
+            h.className = 'category-title';
+            h.textContent = cat;
+            section.appendChild(h);
+            const grid = document.createElement('div');
+            grid.className = 'cards';
+            list.forEach(item => {
+                const card = document.createElement('article');
+                card.className = 'card';
+                const titleRow = document.createElement('div');
+                titleRow.className = 'card-title-row';
+                const title = document.createElement('h4');
+                title.className = 'card-title';
+                title.textContent = item.name;
+                const price = document.createElement('div');
+                price.className = 'card-price';
+                price.textContent = '$' + item.price.toFixed(2); 
+                titleRow.appendChild(title);
+                titleRow.appendChild(price);
+                const desc = document.createElement('p');
+                desc.className = 'card-desc';
+                desc.textContent = item.desc;
+                const actions = document.createElement('div');
+                actions.className = 'card-actions';
+                const addBtn = document.createElement('button');
+                addBtn.className = 'btn';
+                addBtn.textContent = 'Agregar';
+                addBtn.onclick = () => addToCart(item);
+                actions.appendChild(addBtn);
+                card.appendChild(titleRow);
+                card.appendChild(desc);
+                card.appendChild(actions);
+                grid.appendChild(card);
+            });
+            section.appendChild(grid);
+            menuEl.appendChild(section);
+        });
+        document.getElementById('year').textContent = new Date().getFullYear();
+    });
+
+    let cart = [];
+    function addToCart(item) {
+        const existing = cart.find(i => i.name === item.name);
+        if (existing) { existing.qty++; } else { cart.push({ ...item, qty: 1 }); }
+        renderCart();
+    }
+    function removeFromCart(name) {
+        cart = cart.filter(i => i.name !== name);
+        renderCart();
+    }
+    function renderCart() {
+        const cartList = document.getElementById('cart-items');
+        const cartTotal = document.getElementById('cart-total');
+        cartList.innerHTML = '';
+        let total = 0;
+        cart.forEach(item => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span>${item.qty} × ${item.name}</span><span>$${(item.price * item.qty).toFixed(2)}</span><button class="btn-remove">✖</button>`;
+            li.querySelector('.btn-remove').onclick = () => removeFromCart(item.name);
+            cartList.appendChild(li);
+            total += item.price * item.qty;
+        });
+        cartTotal.textContent = total.toFixed(2);
+    }
+
+    window.finalizarVenta = async function(metodo) {
+        if (cart.length === 0) { 
+            alert("Tu carrito está vacío."); 
+            return; 
+        }
+
+        const cliente = prompt("Nombre del cliente:", "Venta de Mostrador");
+        if (cliente === null) return;
+
+        const response = await fetchWithToken('/api/checkout', {
+            method: 'POST',
+            body: JSON.stringify({ 
+                cliente: cliente, 
+                telefono: "", 
+                metodo_pago: metodo,
+                items: cart 
+            })
+        });
+
+        if (response && response.ok) {
+            alert(`✅ Venta registrada con ${metodo}`);
+            cart = []; 
+            renderCart();
+        } else {
+            alert('❌ Error al guardar en la base de datos.');
+        }
+    };
+
+</script>
+</body>
+</html>

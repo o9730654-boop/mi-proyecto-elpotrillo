@@ -1,0 +1,93 @@
+/* DISEÑO GENERAL */
+body {
+    background-color: #f0f2f5;
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
+    padding-top: 80px;
+}
+
+/* PANEL SUPERIOR ESTÁTICO */
+.site-header {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    background: #2c3e50;
+    color: white;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.header-inner {
+    display: flex;
+    justify-content: space-between;
+    padding: 15px 5%;
+    align-items: center;
+}
+
+.main-nav a {
+    color: white;
+    text-decoration: none;
+    margin-left: 20px;
+    font-weight: bold;
+}
+
+/* CUADRÍCULA DE TARJETAS (Como tu foto) */
+.layout-container {
+    display: flex;
+    padding: 20px;
+    gap: 20px;
+}
+
+.cards-container {
+    flex: 3;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.card {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border: 1px solid #eee;
+}
+
+.card-title { margin: 0; color: #333; font-size: 1.2rem; }
+.card-desc { color: #777; font-size: 0.9rem; margin: 10px 0; }
+
+.card-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+}
+
+.price { font-weight: bold; color: #2c3e50; font-size: 1.1rem; }
+
+/* BOTÓN ROJO (Como tu foto) */
+.btn-add {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-add:hover { background-color: #c0392b; }
+
+/* CARRITO */
+.cart-sidebar {
+    flex: 1;
+    background: white;
+    padding: 20px;
+    border-radius: 15px;
+    height: fit-content;
+    position: sticky;
+    top: 100px;
+}

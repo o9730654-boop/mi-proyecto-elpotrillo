@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Corte - El Potrillo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='12341.css') }}" />
+    <style>
+        .report-card { max-width: 600px; margin: 80px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed #ddd; font-size: 16px; }
+        .info-row span { font-weight: 600; }
+        .total-box { background: #e67e22; color: white; padding: 20px; text-align: center; border-radius: 8px; margin-top: 25px; font-size: 1.4rem; font-weight: bold; }
+        .balance-status { margin-top: 20px; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; display: none; }
+        .status-ok { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .status-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .btn { padding: 12px; background-color: #e67e22; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; width: 100%; margin-top: 20px; }
+        .btn:hover { background-color: #d35400; }
+        h2 { text-align: center; color: #e67e22; margin-top: 0; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-inner">
+            <h1 class="logo">El Potrillo - Corte</h1>
+            <nav class="main-nav">
+                <a href="/menu">↩ Regresar al Menú</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="report-card">
+        <h2>✂️ Corte de Caja Diario</h2>
+        
+        <div class="info-row">
+            <span>📅 Fecha del Corte:</span> 
+            <span id="fecha-corte">Cargando...</span>
+        </div>
+        
+        <div class="info-row">
+            <span>💵 Ventas Efectivo:</span> 
+            <span id="ventas-efectivo">$0.00</span>
+        </div>
+        
+        <div class="info-row">
+            <span>💳 Ventas Tarjeta:</span> 
+            <span id="ventas-tarjeta">$0.00</span>
+        </div>
+        
+        <div class="info-row">
+            <span>🔢 Transacciones:</span> 
+            <span id="num-transacciones">0</span>
+        </div>
+        
+        <div class="total-box">Total en Sistema: $<span id="total-general">0.00</span></div>
+
+        <button class="btn" onclick="verificarCaja()">
+            🔍 Verificar Caja Física
+        </button>
+
+        <div id="balance-result" class="balance-status"></div>
+    </div>
+
+    <script>
+        // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN
+        async function fetchWithToken(url, options = {}) {
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                alert('Error de sesión. Inicia sesión de nuevo.');
+                window.location.href = '/';
+                return null;
+            }
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                ...options.headers
+            };
+
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+
+            if (response.status === 401) {
+                alert('Sesión expirada. Por favor inicia sesión de nuevo.');
+                localStorage.removeItem('token');
+                window.location.href = '/';
+                return null;
+            }
+
+            return response;
+        }
+
+        // Variable global para guardar lo que el sistema dice que hay en efectivo
+        let efectivoEnSistema = 0;
+
+        async function cargarReporte() {
+            try {
+                const response = await fetchWithToken('/api/reporte/corte', {
+                    method: 'GET'
+                });
+
+                if (!response) return;
+
+                if (!response.ok) {
+                    throw new Error('Error al cargar el reporte');
+                }
+
+                const data = await response.json();
+                
+                document.getElementById('fecha-corte').textContent = data.fecha_corte;
+                document.getElementById('ventas-efectivo').textContent = `$${data.ventas_efectivo.toFixed(2)}`;
+                document.getElementById('ventas-tarjeta').textContent = `$${data.ventas_tarjeta.toFixed(2)}`;
+                document.getElementById('num-transacciones').textContent = data.num_transacciones;
+                document.getElementById('total-general').textContent = data.total_general.toFixed(2);
+                
+                // Guardamos el valor para la comparación posterior
+                efectivoEnSistema = data.ventas_efectivo;
+            } catch (error) {
+                console.error("Error al cargar:", error);
+                document.getElementById('fecha-corte').textContent = 'Error';
+            }
+        }
+
+        // Función que verifica la caja física
+        function verificarCaja() {
+            // 1. Obtenemos lo que el sistema dice que hay en ambos métodos
+            const ventasEfectivo = parseFloat(document.getElementById('ventas-efectivo').textContent.replace('$', '')) || 0;
+            const ventasTarjeta = parseFloat(document.getElementById('ventas-tarjeta').textContent.replace('$', '')) || 0;
+            
+            // El total que debería haber sumando vouchers y billetes
+            const totalEsperado = ventasEfectivo + ventasTarjeta;
+
+            const fisico = prompt("💰 Ingrese el TOTAL real (Suma de Efectivo + Vouchers de Tarjeta):");
+            
+            if (fisico === null || fisico === "") return;
+            
+            const cantFisica = parseFloat(fisico);
+            if (isNaN(cantFisica)) {
+                alert("Por favor, ingrese un número válido.");
+                return;
+            }
+
+            const diferencia = cantFisica - totalEsperado;
+            const resDiv = document.getElementById('balance-result');
+            resDiv.style.display = "block";
+
+            if (Math.abs(diferencia) < 0.01) {
+                resDiv.innerHTML = `✅ Caja Cuadrada Perfectamente<br><small>(Esperado: $${totalEsperado.toFixed(2)})</small>`;
+                resDiv.className = 'balance-status status-ok';
+            } else if (diferencia > 0) {
+                resDiv.innerHTML = `💰 Sobrante: $${diferencia.toFixed(2)}<br><small></small>`;
+                resDiv.className = 'balance-status status-ok';
+            } else {
+                resDiv.innerHTML = `⚠️ Faltante: $${Math.abs(diferencia).toFixed(2)}<br><small></small>`;
+                resDiv.className = 'balance-status status-error';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', cargarReporte);
+    </script>
+</body>
+</html>
