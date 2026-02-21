@@ -147,22 +147,16 @@
             }
         }
 
-        function renderPedidos(pedidos) {
+   function renderPedidos(pedidos) {
     const container = document.getElementById('pedidos-container');
-    
-    if (pedidos.length === 0) {
-        container.innerHTML = '<div class="loading">✅ No hay pedidos pendientes</div>';
-        return;
-    }
-
-    container.innerHTML = '';
-
-    // CORRECCIÓN 1: Cambiado item.rowid por item.id
+    // ... (tu código anterior)
     const ordenes = pedidos.reduce((acc, item) => {
+        // CAMBIO AQUÍ: Usar item.id en lugar de item.rowid
         if (!acc[item.cliente]) acc[item.cliente] = { items: [], estado: item.estado, id: item.id };
         acc[item.cliente].items.push(item);
         return acc;
     }, {});
+    // ... (resto de la función)
 
     for (const cliente in ordenes) {
         const orden = ordenes[cliente];
@@ -196,42 +190,21 @@
 
 async function actualizarPedido(id, nuevoEstado) {
     try {
-        // CORRECCIÓN 2: Cambiado POST por PUT para que coincida con Flaskk.py
         const response = await fetchWithToken(`/api/cocina/actualizar/${id}`, {
-            method: 'PUT', 
+            method: 'PUT', // CAMBIO AQUÍ: Debe ser PUT
             body: JSON.stringify({ estado: nuevoEstado })
         });
 
         if (response && response.ok) {
             fetchPedidos();
         } else {
-            const errorText = await response.text();
-            console.error('Detalle del error:', errorText);
-            alert('Error al actualizar el pedido en el servidor');
+            alert('Error al actualizar el pedido');
         }
     } catch (error) {
         console.error('Error:', error);
         alert('Error de conexión');
     }
 }
-
-        async function actualizarPedido(id, nuevoEstado) {
-            try {
-                const response = await fetchWithToken(`/api/cocina/actualizar/${id}`, {
-                    method: 'POST',
-                    body: JSON.stringify({ estado: nuevoEstado })
-                });
-
-                if (response && response.ok) {
-                    fetchPedidos();
-                } else {
-                    alert('Error al actualizar el pedido');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error de conexión');
-            }
-        }
 
         // Cargar pedidos al iniciar
         fetchPedidos();
