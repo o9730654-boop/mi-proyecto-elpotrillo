@@ -117,13 +117,16 @@ def login():
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
     conn = get_db_connection()
+    cur = conn.cursor() # Usamos cursor para Postgres
     try:
-        menu_items = conn.execute('SELECT Mnu_nombre_plato, Mnu_descripcion, Mnu_precio FROM menu').fetchall()
-        return jsonify([dict(row) for row in menu_items]), 200
+        cur.execute('SELECT mnu_nombre_plato, mnu_descripcion, mnu_precio FROM menu')
+        menu_items = cur.fetchall()
+        return jsonify(menu_items), 200
     except Exception as e:
         print(f"Error en menu: {e}")
         return jsonify({'message': str(e)}), 500
     finally:
+        cur.close() # Siempre cerrar el cursor
         conn.close()
 
 @app.route('/api/cocina/pedidos', methods=['GET'])
@@ -166,10 +169,12 @@ def register_sale(current_user):
     items = data.get('items', [])
 
     conn = get_db_connection()
+    cur = conn.cursor()
     try:
         for item in items:
-            conn.execute(
-                "INSERT INTO formulario (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado) VALUES (?, ?, ?, ?, ?, DATE('now', 'localtime'), ?, ?)",
+            # En Postgres usamos %s en lugar de ?
+            cur.execute(
+                "INSERT INTO formulario (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado) VALUES (%s, %s, %s, %s, %s, CURRENT_DATE, %s, %s)",
                 (cliente, "", item['name'], item['price'], item['qty'], metodo, 'Pendiente')
             )
         conn.commit()
@@ -178,8 +183,8 @@ def register_sale(current_user):
         print(f"Error en checkout: {e}")
         return jsonify({'message': str(e)}), 500
     finally:
+        cur.close()
         conn.close()
-
 @app.errorhandler(500)
 def internal_error(error):
     print(f"Error 500: {error}")
