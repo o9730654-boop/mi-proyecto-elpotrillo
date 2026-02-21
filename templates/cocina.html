@@ -148,50 +148,72 @@
         }
 
         function renderPedidos(pedidos) {
-            const container = document.getElementById('pedidos-container');
-            
-            if (pedidos.length === 0) {
-                container.innerHTML = '<div class="loading">✅ No hay pedidos pendientes</div>';
-                return;
-            }
+    const container = document.getElementById('pedidos-container');
+    
+    if (pedidos.length === 0) {
+        container.innerHTML = '<div class="loading">✅ No hay pedidos pendientes</div>';
+        return;
+    }
 
-            container.innerHTML = '';
+    container.innerHTML = '';
 
-            const ordenes = pedidos.reduce((acc, item) => {
-                if (!acc[item.cliente]) acc[item.cliente] = { items: [], estado: item.estado, id: item.rowid };
-                acc[item.cliente].items.push(item);
-                return acc;
-            }, {});
+    // CORRECCIÓN 1: Cambiado item.rowid por item.id
+    const ordenes = pedidos.reduce((acc, item) => {
+        if (!acc[item.cliente]) acc[item.cliente] = { items: [], estado: item.estado, id: item.id };
+        acc[item.cliente].items.push(item);
+        return acc;
+    }, {});
 
-            for (const cliente in ordenes) {
-                const orden = ordenes[cliente];
-                const card = document.createElement('div');
-                card.className = 'card';
-                
-                const estadoClass = orden.estado.replace(' ', '');
-                
-                card.innerHTML = `
-                    <div class="card-header ${estadoClass}">
-                        <span><strong>${cliente.toUpperCase()}</strong></span>
-                        <span>${orden.estado}</span>
+    for (const cliente in ordenes) {
+        const orden = ordenes[cliente];
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        const estadoClass = orden.estado.replace(' ', '');
+        
+        card.innerHTML = `
+            <div class="card-header ${estadoClass}">
+                <span><strong>${cliente.toUpperCase()}</strong></span>
+                <span>${orden.estado}</span>
+            </div>
+            <div class="card-body">
+                ${orden.items.map(i => `
+                    <div class="item-row">
+                        <span>${i.cantidad}x ${i.producto}</span>
                     </div>
-                    <div class="card-body">
-                        ${orden.items.map(i => `
-                            <div class="item-row">
-                                <span>${i.cantidad}x ${i.producto}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="card-footer">
-                        ${orden.estado === 'Pendiente' ? 
-                            `<button class="btn btn-start" onclick="actualizarPedido(${orden.id}, 'En Proceso')">EMPEZAR COCINA</button>` : 
-                            `<button class="btn btn-done" onclick="actualizarPedido(${orden.id}, 'Terminado')">MARCAR COMO LISTO</button>`
-                        }
-                    </div>
-                `;
-                container.appendChild(card);
-            }
+                `).join('')}
+            </div>
+            <div class="card-footer">
+                ${orden.estado === 'Pendiente' ? 
+                    `<button class="btn btn-start" onclick="actualizarPedido(${orden.id}, 'En Proceso')">EMPEZAR COCINA</button>` : 
+                    `<button class="btn btn-done" onclick="actualizarPedido(${orden.id}, 'Terminado')">MARCAR COMO LISTO</button>`
+                }
+            </div>
+        `;
+        container.appendChild(card);
+    }
+}
+
+async function actualizarPedido(id, nuevoEstado) {
+    try {
+        // CORRECCIÓN 2: Cambiado POST por PUT para que coincida con Flaskk.py
+        const response = await fetchWithToken(`/api/cocina/actualizar/${id}`, {
+            method: 'PUT', 
+            body: JSON.stringify({ estado: nuevoEstado })
+        });
+
+        if (response && response.ok) {
+            fetchPedidos();
+        } else {
+            const errorText = await response.text();
+            console.error('Detalle del error:', errorText);
+            alert('Error al actualizar el pedido en el servidor');
         }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error de conexión');
+    }
+}
 
         async function actualizarPedido(id, nuevoEstado) {
             try {
