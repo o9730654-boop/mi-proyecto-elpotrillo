@@ -135,6 +135,28 @@ def login():
         token = jwt.encode({'user_id': 1, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, SECRET_KEY, algorithm="HS256")
         return jsonify({'message': 'Éxito', 'token': token}), 200 
     return jsonify({'message': 'Credenciales incorrectas'}), 401
+@app.route('/api/cocina/actualizar/<int:pedido_id>', methods=['PUT'])
+@login_required
+def actualizar_estado_pedido(current_user, pedido_id):
+    data = request.get_json()
+    nuevo_estado = data.get('estado')
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # En Postgres usamos %s para el ID y el estado
+        cur.execute(
+            "UPDATE formulario SET estado = %s WHERE id = %s",
+            (nuevo_estado, pedido_id)
+        )
+        conn.commit()
+        return jsonify({'message': 'Estado actualizado'}), 200
+    except Exception as e:
+        print(f"Error actualizando pedido: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
