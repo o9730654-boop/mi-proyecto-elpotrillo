@@ -1,8 +1,10 @@
-import sqlite3
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS 
 import jwt
 import datetime
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import os
 from functools import wraps
 
@@ -30,8 +32,8 @@ def login_required(f):
     return decorated
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_NAME) 
-    conn.row_factory = sqlite3.Row
+    # Conexión a PostgreSQL en Render
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
     return conn
 
 @app.route('/')
