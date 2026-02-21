@@ -61,26 +61,27 @@ def view_cocina():
 @login_required
 def get_corte_reporte(current_user):
     conn = get_db_connection()
+    cur = conn.cursor()
     fecha_actual = datetime.datetime.now().strftime('%d/%m/%Y')
 
     try:
-        # Obtener fecha de hoy en formato YYYY-MM-DD
-        hoy = datetime.datetime.now().strftime('%Y-%m-%d')
+        # Ventas Efectivo
+        cur.execute(
+            "SELECT SUM(precio * cantidad) FROM formulario WHERE fecha = CURRENT_DATE AND metodo_pago = 'Efectivo'"
+        )
+        efectivo = cur.fetchone()['sum'] or 0 # Usamos el nombre de la columna 'sum'
         
-        efectivo = conn.execute(
-            "SELECT SUM(precio * cantidad) FROM formulario WHERE DATE(fecha) = ? AND metodo_pago = 'Efectivo'",
-            (hoy,)
-        ).fetchone()[0] or 0
+        # Ventas Tarjeta
+        cur.execute(
+            "SELECT SUM(precio * cantidad) FROM formulario WHERE fecha = CURRENT_DATE AND metodo_pago = 'Tarjeta'"
+        )
+        tarjeta = cur.fetchone()['sum'] or 0
         
-        tarjeta = conn.execute(
-            "SELECT SUM(precio * cantidad) FROM formulario WHERE DATE(fecha) = ? AND metodo_pago = 'Tarjeta'",
-            (hoy,)
-        ).fetchone()[0] or 0
-        
-        transacciones = conn.execute(
-            "SELECT COUNT(DISTINCT cliente) FROM formulario WHERE DATE(fecha) = ?",
-            (hoy,)
-        ).fetchone()[0] or 0
+        # Transacciones
+        cur.execute(
+            "SELECT COUNT(DISTINCT cliente) FROM formulario WHERE fecha = CURRENT_DATE"
+        )
+        transacciones = cur.fetchone()['count'] or 0
 
         return jsonify({
             'fecha_corte': fecha_actual,
@@ -93,6 +94,7 @@ def get_corte_reporte(current_user):
         print(f"Error en reporte: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
+        cur.close()
         conn.close()
 
 
@@ -145,19 +147,24 @@ def get_pedidos_cocina(current_user):
     finally:
         conn.close()
 
-@app.route('/api/cocina/actualizar/<int:rowid>', methods=['POST'])
+@app.route('/api/cocina/pedidos', methods=['GET'])
 @login_required
-def actualizar_estado(current_user, rowid):
+def get_pedidos_cocina(current_user):
+    conn = get_db_connection()
+    cur = conn.cursor() # Creamos el cursor obligatorio para Postgres
     try:
-        nuevo_estado = request.json.get('estado')
-        conn = get_db_connection()
-        conn.execute("UPDATE formulario SET estado = ? WHERE rowid = ?", (nuevo_estado, rowid))
-        conn.commit()
-        conn.close()
-        return jsonify({'message': 'Estado actualizado'}), 200
+        # Nota: Postgres no usa 'rowid', asegúrate de tener una columna 'id'
+        cur.execute(
+            "SELECT id, cliente, producto, cantidad, estado FROM formulario WHERE estado != 'Terminado' ORDER BY id DESC"
+        )
+        pedidos = cur.fetchall()
+        return jsonify(pedidos), 200
     except Exception as e:
-        print(f"Error al actualizar estado: {e}")
+        print(f"Error en pedidos cocina: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 
 @app.route('/api/checkout', methods=['POST'])
