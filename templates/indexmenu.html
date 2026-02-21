@@ -87,19 +87,26 @@
     async function loadMenu() {
         try {
             const response = await fetch('/api/menu');
+            
+            // Si la respuesta no es un JSON (es decir, empieza con <), 
+            // es porque hay un error en el servidor.
             if (!response.ok) {
-                const errorData = await response.json(); 
-                throw new Error(errorData.message || 'Error desconocido.');
+                const errorText = await response.text();
+                console.error('Error del servidor:', errorText);
+                throw new Error('El servidor devolvió un error. Revisa los logs en Render.');
             }
+
             const data = await response.json();
+            
             return data.map(item => ({
-                name: item.Mnu_nombre_plato,   
-                desc: item.Mnu_descripcion,    
-                price: item.Mnu_precio,        
-                category: classifyCategory(item.Mnu_nombre_plato) 
+                // USAMOS MINÚSCULAS AQUÍ:
+                name: item.mnu_nombre_plato,   
+                desc: item.mnu_descripcion,    
+                price: parseFloat(item.mnu_precio) || 0,        
+                category: classifyCategory(item.mnu_nombre_plato || "") 
             }));
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error en JavaScript:', error);
             alert('Error al cargar el menú: ' + error.message);
             return []; 
         }

@@ -12,8 +12,8 @@ app = Flask(__name__)
 CORS(app) 
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'tu_super_clave_secreta_12345')
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(BASE_DIR, 'karlaa.db')
+# IMPORTANTE: Definimos DATABASE_URL desde las variables de entorno de Render
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def login_required(f):
     @wraps(f)
@@ -32,8 +32,9 @@ def login_required(f):
     return decorated
 
 def get_db_connection():
-    # Conexión a PostgreSQL en Render
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    # Conexión a PostgreSQL usando la URL de Render
+    # RealDictCursor permite que los resultados se comporten como diccionarios
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require', cursor_factory=RealDictCursor)
     return conn
 
 @app.route('/')
