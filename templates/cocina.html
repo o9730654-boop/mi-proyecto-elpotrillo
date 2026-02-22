@@ -18,7 +18,7 @@
             display: flex; 
             align-items: center; 
             justify-content: space-between; 
-            border-bottom: 2px solid #bdc3c7; 
+            border-bottom: 2px solid #bdc3c7;   
             padding-bottom: 10px;
             margin-bottom: 20px;
         }
@@ -90,127 +90,117 @@
     </div>
 
     <script>
-        // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN
-        async function fetchWithToken(url, options = {}) {
-            const token = localStorage.getItem('token');
-            
-            if (!token) {
-                alert('Error de sesión. Inicia sesión de nuevo.');
-                window.location.href = '/';
-                return null;
+    // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN (Se mantiene igual)
+    async function fetchWithToken(url, options = {}) {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Error de sesión. Inicia sesión de nuevo.');
+            window.location.href = '/';
+            return null;
+        }
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            ...options.headers
+        };
+        const response = await fetch(url, { ...options, headers });
+        if (response.status === 401) {
+            alert('Sesión expirada.');
+            localStorage.removeItem('token');
+            window.location.href = '/';
+            return null;
+        }
+        return response;
+    }
+
+    async function fetchPedidos() {
+        try {
+            const response = await fetchWithToken('/api/cocina/pedidos', { method: 'GET' });
+            if (!response || !response.ok) return;
+            const pedidos = await response.json();
+            renderPedidos(pedidos);
+        } catch (error) { 
+            console.error("Error cargando cocina:", error);
+        }
+    }
+
+    function renderPedidos(pedidos) {
+        const container = document.getElementById('pedidos-container');
+        
+        // 1. LIMPIEZA TOTAL: Esto evita que se amontonen las tarjetas viejas
+        container.innerHTML = '';
+
+        if (pedidos.length === 0) {
+            container.innerHTML = '<div class="loading">✅ No hay pedidos pendientes</div>';
+            return;
+        }
+
+        // 2. AGRUPACIÓN POR ID ÚNICO: Evita duplicados visuales por cliente
+        const ordenes = pedidos.reduce((acc, item) => {
+            if (!acc[item.id]) {
+                acc[item.id] = { 
+                    cliente: item.cliente, 
+                    items: [], 
+                    estado: item.estado, 
+                    id: item.id 
+                };
             }
+            acc[item.id].items.push(item);
+            return acc;
+        }, {});
 
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-                ...options.headers
-            };
+        // 3. RENDERIZADO LIMPIO
+        for (const id in ordenes) {
+            const orden = ordenes[id];
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            const estadoClass = orden.estado.replace(/\s+/g, ''); // Quita espacios para la clase CSS
+            
+            card.innerHTML = `
+                <div class="card-header ${estadoClass}">
+                    <span><strong>${orden.cliente.toUpperCase()}</strong></span>
+                    <span>${orden.estado}</span>
+                </div>
+                <div class="card-body">
+                    ${orden.items.map(i => `
+                        <div class="item-row">
+                            <span>${i.cantidad}x ${i.producto}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="card-footer">
+                    ${orden.estado === 'Pendiente' ? 
+                        `<button class="btn btn-start" onclick="actualizarPedido(${orden.id}, 'En Proceso')">EMPEZAR COCINA</button>` : 
+                        `<button class="btn btn-done" onclick="actualizarPedido(${orden.id}, 'Terminado')">MARCAR COMO LISTO</button>`
+                    }
+                </div>
+            `;
+            container.appendChild(card);
+        }
+    }
 
-            const response = await fetch(url, {
-                ...options,
-                headers
+    async function actualizarPedido(id, nuevoEstado) {
+        try {
+            // Se usa PUT para coincidir con la ruta de Flaskk.py
+            const response = await fetchWithToken(`/api/cocina/actualizar/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ estado: nuevoEstado })
             });
 
-            if (response.status === 401) {
-                alert('Sesión expirada. Por favor inicia sesión de nuevo.');
-                localStorage.removeItem('token');
-                window.location.href = '/';
-                return null;
+            if (response && response.ok) {
+                // Actualiza la vista inmediatamente después del cambio
+                fetchPedidos(); 
+            } else {
+                alert('Error al actualizar el pedido');
             }
-
-            return response;
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error de conexión');
         }
-
-        async function fetchPedidos() {
-            try {
-                const response = await fetchWithToken('/api/cocina/pedidos', {
-                    method: 'GET'
-                });
-
-                if (!response) return;
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    document.getElementById('pedidos-container').innerHTML = `
-                        <div class="error">❌ Error: ${error.error || 'Error al cargar pedidos'}</div>
-                    `;
-                    return;
-                }
-
-                const pedidos = await response.json();
-                renderPedidos(pedidos);
-            } catch (error) { 
-                console.error("Error cargando cocina:", error);
-                document.getElementById('pedidos-container').innerHTML = `
-                    <div class="error">❌ Error de conexión: ${error.message}</div>
-                `;
-            }
-        }
-
-   function renderPedidos(pedidos) {
-    const container = document.getElementById('pedidos-container');
-    // ... (tu código anterior)
-    const ordenes = pedidos.reduce((acc, item) => {
-        // CAMBIO AQUÍ: Usar item.id en lugar de item.rowid
-        if (!acc[item.cliente]) acc[item.cliente] = { items: [], estado: item.estado, id: item.id };
-        acc[item.cliente].items.push(item);
-        return acc;
-    }, {});
-    // ... (resto de la función)
-
-    for (const cliente in ordenes) {
-        const orden = ordenes[cliente];
-        const card = document.createElement('div');
-        card.className = 'card';
-        
-        const estadoClass = orden.estado.replace(' ', '');
-        
-        card.innerHTML = `
-            <div class="card-header ${estadoClass}">
-                <span><strong>${cliente.toUpperCase()}</strong></span>
-                <span>${orden.estado}</span>
-            </div>
-            <div class="card-body">
-                ${orden.items.map(i => `
-                    <div class="item-row">
-                        <span>${i.cantidad}x ${i.producto}</span>
-                    </div>
-                `).join('')}
-            </div>
-            <div class="card-footer">
-                ${orden.estado === 'Pendiente' ? 
-                    `<button class="btn btn-start" onclick="actualizarPedido(${orden.id}, 'En Proceso')">EMPEZAR COCINA</button>` : 
-                    `<button class="btn btn-done" onclick="actualizarPedido(${orden.id}, 'Terminado')">MARCAR COMO LISTO</button>`
-                }
-            </div>
-        `;
-        container.appendChild(card);
     }
-}
 
-async function actualizarPedido(id, nuevoEstado) {
-    try {
-        const response = await fetchWithToken(`/api/cocina/actualizar/${id}`, {
-            method: 'PUT', // CAMBIO AQUÍ: Debe ser PUT
-            body: JSON.stringify({ estado: nuevoEstado })
-        });
-
-        if (response && response.ok) {
-            fetchPedidos();
-        } else {
-            alert('Error al actualizar el pedido');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error de conexión');
-    }
-}
-
-        // Cargar pedidos al iniciar
-        fetchPedidos();
-
-        // Actualizar cada 5 segundos
-        setInterval(fetchPedidos, 5000);
-    </script>
-</body>
-</html>
+    // Inicio y ciclo de actualización cada 5 segundos
+    fetchPedidos();
+    setInterval(fetchPedidos, 5000);
+</script>
