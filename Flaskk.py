@@ -58,12 +58,18 @@ def get_corte_reporte(current_user):
     cur = conn.cursor()
     fecha_actual = datetime.datetime.now().strftime('%d/%m/%Y')
     try:
+        # Suma de efectivo
         cur.execute("SELECT SUM(precio * cantidad) as total FROM formulario WHERE fecha = CURRENT_DATE AND metodo_pago = 'Efectivo'")
         efectivo = cur.fetchone()['total'] or 0
+        
+        # Suma de tarjeta
         cur.execute("SELECT SUM(precio * cantidad) as total FROM formulario WHERE fecha = CURRENT_DATE AND metodo_pago = 'Tarjeta'")
         tarjeta = cur.fetchone()['total'] or 0
-        cur.execute("SELECT COUNT(DISTINCT cliente) as total FROM formulario WHERE fecha = CURRENT_DATE")
+        
+        # CAMBIO AQUÍ: Contar todos los registros del día en lugar de clientes distintos
+        cur.execute("SELECT COUNT(*) as total FROM formulario WHERE fecha = CURRENT_DATE")
         transacciones = cur.fetchone()['total'] or 0
+        
         return jsonify({
             'fecha_corte': fecha_actual,
             'ventas_efectivo': float(efectivo),
