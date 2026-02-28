@@ -28,36 +28,21 @@
     </header>
 
     <div class="report-card">
-        <h2>✂️ Corte de Caja Diario</h2>
-        
-        <div class="info-row">
-            <span>📅 Fecha del Corte:</span> 
-            <span id="fecha-corte">Cargando...</span>
-        </div>
-        
-        <div class="info-row">
-            <span>💵 Ventas Efectivo:</span> 
-            <span id="ventas-efectivo">$0.00</span>
-        </div>
-        
-        <div class="info-row">
-            <span>💳 Ventas Tarjeta:</span> 
-            <span id="ventas-tarjeta">$0.00</span>
-        </div>
-        
-        <div class="info-row">
-            <span>🔢 Transacciones:</span> 
-            <span id="num-transacciones">0</span>
-        </div>
+        <h2 style="text-align:center; color: var(--accent);">✂️ Corte de Caja Diario</h2>
+        <div class="info-row"><span>📅 Fecha del Corte:</span> <span id="fecha-corte">Cargando...</span></div>
+        <div class="info-row"><span>💵 Ventas Efectivo:</span> <span id="ventas-efectivo">$0.00</span></div>
+        <div class="info-row"><span>💳 Ventas Tarjeta:</span> <span id="ventas-tarjeta">$0.00</span></div>
         
         <div class="total-box">Total en Sistema: $<span id="total-general">0.00</span></div>
 
-        <button class="btn" onclick="verificarCaja()">
-            🔍 Verificar Caja Física
-        </button>
-
         <div id="balance-result" class="balance-status"></div>
-    </div>
+        
+        <button class="btn" style="width:100%; margin-top:20px; padding:12px; background-color: #c34a36; color: white; border: none; border-radius: 8px; cursor: pointer;" 
+        onclick="verificarCaja()">
+    🔍 Verificar Caja Física
+</button>
+
+<div id="balance-result" style="margin-top: 15px; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; display: none;"></div>
 
     <script>
         // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN
@@ -95,69 +80,202 @@
         let efectivoEnSistema = 0;
 
         async function cargarReporte() {
+            const token = localStorage.getItem('authToken');
             try {
                 const response = await fetchWithToken('/api/reporte/corte', {
-                    method: 'GET'
-                });
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
-                if (!response) return;
-
-                if (!response.ok) {
-                    throw new Error('Error al cargar el reporte');
-                }
-
-                const data = await response.json();
-                
+               const data = await response.json();
+            
+            if (response.ok) {
                 document.getElementById('fecha-corte').textContent = data.fecha_corte;
                 document.getElementById('ventas-efectivo').textContent = `$${data.ventas_efectivo.toFixed(2)}`;
                 document.getElementById('ventas-tarjeta').textContent = `$${data.ventas_tarjeta.toFixed(2)}`;
-                document.getElementById('num-transacciones').textContent = data.num_transacciones;
                 document.getElementById('total-general').textContent = data.total_general.toFixed(2);
                 
                 // Guardamos el valor para la comparación posterior
                 efectivoEnSistema = data.ventas_efectivo;
-            } catch (error) {
-                console.error("Error al cargar:", error);
-                document.getElementById('fecha-corte').textContent = 'Error';
             }
+        } catch (error) {
+            console.error("Error al cargar:", error);
         }
+    }
 
-        // Función que verifica la caja física
-        function verificarCaja() {
-            // 1. Obtenemos lo que el sistema dice que hay en ambos métodos
-            const ventasEfectivo = parseFloat(document.getElementById('ventas-efectivo').textContent.replace('$', '')) || 0;
-            const ventasTarjeta = parseFloat(document.getElementById('ventas-tarjeta').textContent.replace('$', '')) || 0;
-            
-            // El total que debería haber sumando vouchers y billetes
-            const totalEsperado = ventasEfectivo + ventasTarjeta;
+// Esta es la función que hace que el botón funcione
+    function verificarCaja() {
+    // 1. Obtenemos lo que el sistema dice que hay en ambos métodos
+    const ventasEfectivo = parseFloat(document.getElementById('ventas-efectivo').textContent.replace('$', '')) || 0;
+    const ventasTarjeta = parseFloat(document.getElementById('ventas-tarjeta').textContent.replace('$', '')) || 0;
+    
+    // El total que debería haber sumando vouchers y billetes
+    const totalEsperado = ventasEfectivo + ventasTarjeta;
 
-            const fisico = prompt("💰 Ingrese el TOTAL real (Suma de Efectivo + Vouchers de Tarjeta):");
-            
-            if (fisico === null || fisico === "") return;
-            
-            const cantFisica = parseFloat(fisico);
-            if (isNaN(cantFisica)) {
-                alert("Por favor, ingrese un número válido.");
-                return;
-            }
+    const fisico = prompt(" Ingrese el TOTAL real (Suma de Efectivo + Vouchers de Tarjeta):");
+    
+    if (fisico === null || fisico === "") return;
+    
+    const cantFisica = parseFloat(fisico);
+    if (isNaN(cantFisica)) {
+        alert("Por favor, ingrese un número válido.");
+        return;
+    }
 
-            const diferencia = cantFisica - totalEsperado;
-            const resDiv = document.getElementById('balance-result');
-            resDiv.style.display = "block";
+    const diferencia = cantFisica - totalEsperado;
+    const resDiv = document.getElementById('balance-result');
+    resDiv.style.display = "block";
 
-            if (Math.abs(diferencia) < 0.01) {
-                resDiv.innerHTML = `✅ Caja Cuadrada Perfectamente<br><small>(Esperado: $${totalEsperado.toFixed(2)})</small>`;
-                resDiv.className = 'balance-status status-ok';
-            } else if (diferencia > 0) {
-                resDiv.innerHTML = `💰 Sobrante: $${diferencia.toFixed(2)}<br><small></small>`;
-                resDiv.className = 'balance-status status-ok';
-            } else {
-                resDiv.innerHTML = `⚠️ Faltante: $${Math.abs(diferencia).toFixed(2)}<br><small></small>`;
-                resDiv.className = 'balance-status status-error';
-            }
+    if (Math.abs(diferencia) < 0.01) {
+        resDiv.innerHTML = `✅ Caja Cuadrada Perfectamente<br><small>(Esperado: $${totalEsperado.toFixed(2)})</small>`;
+        resDiv.style.backgroundColor = "#dcfce7";
+        resDiv.style.color = "#166534";
+    } else if (diferencia > 0) {
+        resDiv.innerHTML = `💰 Sobrante: $${diferencia.toFixed(2)}<br><small></small>`;
+        resDiv.style.backgroundColor = "#dcfce7";
+        resDiv.style.color = "#166534";
+    } else {
+        resDiv.innerHTML = `⚠️ Faltante: $${Math.abs(diferencia).toFixed(2)}<br><small></small>`;
+        resDiv.style.backgroundColor = "#fee2e2";
+        resDiv.style.color = "#991b1b";
+    }
+}
+
+    document.addEventListener('DOMContentLoaded', cargarReporte);
+</script>
+    </div>
+
+<script>
+// Agrega esta función al final de tu <script>
+async function finalizarVenta(metodo) {
+    if (cart.length === 0) { 
+        alert("Tu carrito está vacío."); 
+        return; 
+    }
+
+    const cliente = prompt("Nombre del cliente:", "Venta de Mostrador");
+    if (cliente === null) return; 
+
+    const token = localStorage.getItem('authToken');
+    if (!token) { 
+        alert("Error de sesión. Por favor inicia sesión de nuevo."); 
+        return; 
+    }
+
+    try {// Esta es la función que hace que el botón funcione
+    function verificarCaja() {
+    // 1. Obtenemos lo que el sistema dice que hay en ambos métodos
+    const ventasEfectivo = parseFloat(document.getElementById('ventas-efectivo').textContent.replace('$', '')) || 0;
+    const ventasTarjeta = parseFloat(document.getElementById('ventas-tarjeta').textContent.replace('$', '')) || 0;
+    
+    // El total que debería haber sumando vouchers y billetes
+    const totalEsperado = ventasEfectivo + ventasTarjeta;
+
+    const fisico = prompt(" Ingrese el TOTAL real (Suma de Efectivo + Vouchers de Tarjeta):");
+    
+    if (fisico === null || fisico === "") return;
+    
+    const cantFisica = parseFloat(fisico);
+    if (isNaN(cantFisica)) {
+        alert("Por favor, ingrese un número válido.");
+        return;
+    }
+
+    const diferencia = cantFisica - totalEsperado;
+    const resDiv = document.getElementById('balance-result');
+    resDiv.style.display = "block";
+
+    if (Math.abs(diferencia) < 0.01) {
+        resDiv.innerHTML = `✅ Caja Cuadrada Perfectamente<br><small>(Esperado: $${totalEsperado.toFixed(2)})</small>`;
+        resDiv.style.backgroundColor = "#dcfce7";
+        resDiv.style.color = "#166534";
+    } else if (diferencia > 0) {
+        resDiv.innerHTML = `💰 Sobrante: $${diferencia.toFixed(2)}<br><small></small>`;
+        resDiv.style.backgroundColor = "#dcfce7";
+        resDiv.style.color = "#166534";
+    } else {
+        resDiv.innerHTML = `⚠️ Faltante: $${Math.abs(diferencia).toFixed(2)}<br><small></small>`;
+        resDiv.style.backgroundColor = "#fee2e2";
+        resDiv.style.color = "#991b1b";
+    }
+}
+
+    document.addEventListener('DOMContentLoaded', cargarReporte);
+</script>
+    </div>
+
+<script>
+// Agrega esta función al final de tu <script>
+async function finalizarVenta(metodo) {
+    if (cart.length === 0) { 
+        alert("Tu carrito está vacío."); 
+        return; 
+    }
+
+    const cliente = prompt("Nombre del cliente:", "Venta de Mostrador");
+    if (cliente === null) return; 
+
+    const token = localStorage.getItem('authToken');
+    if (!token) { 
+        alert("Error de sesión. Por favor inicia sesión de nuevo."); 
+        return; 
+    }
+
+    try {
+        const response = await fetchWithToken('/api/reporte/corte', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ 
+                cliente: cliente, 
+                telefono: "", 
+                metodo_pago: metodo, // "Efectivo" o "Tarjeta"
+                items: cart 
+            })
+        });
+         const data = await response.json();
+
+        if (response.ok) {
+            alert(`✅ Venta guardada con ${metodo}.`);
+            cart = []; 
+            renderCart(); // Limpia la lista visual
+        } else {
+            const errorRes = await response.json();
+            alert('❌ Error: ' + (errorRes.message || 'No se pudo guardar.'));
         }
+    } catch (error) {
+        console.error('Error de red:', error);
+        alert('Error de conexión con el servidor.');
+    }
+}
+         const response = await fetchWithToken('/api/reporte/corte', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ 
+                cliente: cliente, 
+                telefono: "", 
+                metodo_pago: metodo, // "Efectivo" o "Tarjeta"
+                items: cart 
+            })
+        });
 
-        document.addEventListener('DOMContentLoaded', cargarReporte);
-    </script>
+        if (response.ok) {
+            alert(`✅ Venta guardada con ${metodo}.`);
+            cart = []; 
+            renderCart(); // Limpia la lista visual
+        } else {
+            const errorRes = await response.json();
+            alert('❌ Error: ' + (errorRes.message || 'No se pudo guardar.'));
+        }
+    } catch (error) {
+        console.error('Error de red:', error);
+        alert('Error de conexión con el servidor.');
+    }
+}
+</script>
 </body>
 </html>

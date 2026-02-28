@@ -69,3 +69,18 @@ body{margin:0;background:var(--bg);color:#0f172a}
 
 /* Footer */
 .site-footer{padding:14px 0;text-align:center;color:var(--muted);margin-top:30px;border-top:1px solid #ddd}
+#alerta-cocina {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #27ae60;
+    color: white;
+    padding: 15px 30px;
+    border-radius: 50px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    z-index: 9999;
+    display: none;
+    font-weight: bold;
+    font-size: 1.1em;
+}

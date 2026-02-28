@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='12341.css') }}" />
 </head>
 <body>
+<div id="alerta-cocina">🔔 ¡Pedido de <span id="nombre-cliente-listo"></span> listo!</div>
 
 <header class="site-header">
     <div class="container header-inner">
@@ -15,10 +16,11 @@
             <a href="#Comida">Comida</a>
             <a href="#Bebida">Bebidas</a>
             <a href="#Licuados">Licuados</a>
-            <a href="/mesas" class="nav-link">🪑 Mesas</a>
-            <a href="/cocina" class="nav-link">👨‍🍳 Pantalla de Cocina</a>
-            <a onclick="window.location.href = '/reporte';" class="report-link" style="cursor:pointer;">📊 Reporte de Ventas</a>
-            <a href="#" onclick="logout()">🚪 Cerrar Sesión</a>
+            <a href="/reporte-ventas" class="nav-link"> Consulta de ventas</a>
+            <a href="/mesas" class="nav-link"> Mesas</a>
+            <a href="/cocina" class="nav-link"> Pantalla de Cocina</a>
+            <a onclick="window.location.href = '/reporte';" class="report-link" style="cursor:pointer;"> Reporte de Ventas</a>
+            <a href="#" onclick="logout()"> Cerrar Sesión</a>
         </nav>
     </div>
 </header>
@@ -34,10 +36,9 @@
     </div>
     
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
-    <button type="button" class="btn" onclick="window.finalizarVenta('Efectivo')">💵 Efectivo</button>
-    <button type="button" class="btn" onclick="window.finalizarVenta('Tarjeta')">💳 Tarjeta</button>
-    </div>
-    </aside>
+   <button type="button" class="btn" style="grid-column: span 2;" onclick="window.enviarACaja()">📝 Enviar a Caja (Cobrar luego)</button>
+</div>
+</aside>
 </main>
 
 <footer>
@@ -47,39 +48,8 @@
 </footer>
 
 <script>
-    // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN
-    async function fetchWithToken(url, options = {}) {
-        const token = localStorage.getItem('token');
-        
-        if (!token) {
-            alert('Error de sesión. Inicia sesión de nuevo.');
-            window.location.href = '/';
-            return null;
-        }
-
-        const headers = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            ...options.headers
-        };
-
-        const response = await fetch(url, {
-            ...options,
-            headers
-        });
-
-        if (response.status === 401) {
-            alert('Sesión expirada. Por favor inicia sesión de nuevo.');
-            localStorage.removeItem('token');
-            window.location.href = '/';
-            return null;
-        }
-
-        return response;
-    }
-
-    function logout() {
-        localStorage.removeItem('token'); 
+function logout() {
+        localStorage.removeItem('authToken'); 
         alert('Sesión cerrada.');
         window.location.href = '/'; 
     }
@@ -87,26 +57,19 @@
     async function loadMenu() {
         try {
             const response = await fetch('/api/menu');
-            
-            // Si la respuesta no es un JSON (es decir, empieza con <), 
-            // es porque hay un error en el servidor.
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Error del servidor:', errorText);
-                throw new Error('El servidor devolvió un error. Revisa los logs en Render.');
+                const errorData = await response.json(); 
+                throw new Error(errorData.message || 'Error desconocido.');
             }
-
             const data = await response.json();
-            
             return data.map(item => ({
-                // USAMOS MINÚSCULAS AQUÍ:
-                name: item.mnu_nombre_plato,   
-                desc: item.mnu_descripcion,    
-                price: parseFloat(item.mnu_precio) || 0,        
-                category: classifyCategory(item.mnu_nombre_plato || "") 
+                name: item.Mnu_nombre_plato,   
+                desc: item.Mnu_descripcion,    
+                price: item.Mnu_precio,        
+                category: classifyCategory(item.Mnu_nombre_plato) 
             }));
         } catch (error) {
-            console.error('Error en JavaScript:', error);
+            console.error('Error:', error);
             alert('Error al cargar el menú: ' + error.message);
             return []; 
         }
@@ -203,33 +166,89 @@
         cartTotal.textContent = total.toFixed(2);
     }
 
-    window.finalizarVenta = async function(metodo) {
+    // --- SEGUNDO AJUSTE INTEGRADO (FUNCIÓN GLOBAL) ---
+    // ... aquí termina tu función renderCart() y lo demás ...
+
+    // --- AQUÍ PEGAS EL 2DO AJUSTE ---
+   // --- NUEVA FUNCIÓN PARA ENVIAR A CAJA Y COCINA ---
+    window.enviarACaja = async function() {
         if (cart.length === 0) { 
             alert("Tu carrito está vacío."); 
             return; 
         }
 
         const cliente = prompt("Nombre del cliente:", "Venta de Mostrador");
-        if (cliente === null) return;
+        if (cliente === null || cliente.trim() === "") return;
 
-        const response = await fetchWithToken('/api/checkout', {
-            method: 'POST',
-            body: JSON.stringify({ 
-                cliente: cliente, 
-                telefono: "", 
-                metodo_pago: metodo,
-                items: cart 
-            })
-        });
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            alert("Error de sesión. Inicia sesión de nuevo.");
+            window.location.href = '/';
+            return;
+        }
 
-        if (response && response.ok) {
-            alert(`✅ Venta registrada con ${metodo}`);
-            cart = []; 
-            renderCart();
-        } else {
-            alert('❌ Error al guardar en la base de datos.');
+        try {
+            const response = await fetchWithToken('/api/checkout', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ 
+                    cliente: cliente, 
+                    telefono: "", 
+                    metodo_pago: 'Pendiente', // Se envía pendiente para cobrar en el reporte
+                    items: cart 
+                })
+            });
+
+            if (response.ok) {
+                alert(`✅ Orden de ${cliente} enviada a Cocina y Caja`);
+                cart = []; 
+                renderCart();
+            } else {
+                alert('❌ Error al guardar en la base de datos.');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error de conexión con el servidor.');
         }
     };
+    // --- FIN DEL AJUSTE ---
+let ticketsAvisados = new Set(); // Para no repetir la misma alerta muchas veces
+
+async function revisarPedidosListos() {
+    const token = localStorage.getItem('authToken');
+    try {
+        const response = await fetch('/api/notificaciones/listos', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const listos = await response.json();
+
+        listos.forEach(pedido => {
+            // Si el ticket es nuevo y no hemos avisado en esta sesión
+            if (!ticketsAvisados.has(pedido.ticket_id)) {
+                mostrarNotificacionCocina(pedido.cliente);
+                ticketsAvisados.add(pedido.ticket_id);
+            }
+        });
+    } catch (e) { console.error("Error en notificaciones", e); }
+}
+
+function mostrarNotificacionCocina(nombre) {
+    const alerta = document.getElementById('alerta-cocina');
+    document.getElementById('nombre-cliente-listo').innerText = nombre;
+    
+    alerta.style.display = 'block';
+    
+    // Desaparece después de 5 segundos (5000ms)
+    setTimeout(() => {
+        alerta.style.display = 'none';
+    }, 5000);
+}
+
+// Revisar cada 10 segundos si la cocina terminó algo
+setInterval(revisarPedidosListos, 5000);
 
 </script>
 </body>

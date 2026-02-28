@@ -63,49 +63,46 @@
     </div>
 
     <script>
-        async function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('error');
+       document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-            if (!username || !password) {
-                errorDiv.textContent = 'Por favor completa todos los campos';
-                return;
-            }
+    const username = document.getElementById('username-input').value;
+    const password = document.getElementById('password-input').value;
 
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const data = await response.json();
-                console.log('Response:', data);
-
-                if (response.ok) {
-                    // Guardar el token
-                    localStorage.setItem('token', data.token);
-                    console.log('Token guardado:', data.token);
-                    // Redirigir al menú
-                    setTimeout(() => {
-                        window.location.href = '/menu';
-                    }, 500);
-                } else {
-                    errorDiv.textContent = data.message || 'Error en el login';
-                }
-            } catch (error) {
-                errorDiv.textContent = 'Error de conexión: ' + error.message;
-                console.error('Error:', error);
-            }
-        }
-
-        // Permitir login con Enter
-        document.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') login();
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, password: password })
         });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Guardamos token y rol para usar en las siguientes pantallas
+            localStorage.setItem('authToken', data.token);
+            localStorage.setItem('userRol', data.rol);
+
+            // Lógica de redirección por rol
+            const destinos = {
+                'cocinero': '/cocina',
+                'hoster':   '/mesas',
+                'mesero':   '/menu',
+                'cajero':   '/reporte-ventas',
+                'admin':    '/menu' // El admin suele ir al menú o un dashboard general
+            };
+
+            // Si el rol existe en nuestro mapa, redirigimos; si no, al menú por defecto
+            window.location.href = destinos[data.rol] || '/menu';
+            
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error de conexión con el servidor.');
+    }
+});
     </script>
 </body>
 </html>

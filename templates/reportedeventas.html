@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Ventas Detallado - El Potrillo</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+        .header { background: #e67e22; color: white; padding: 20px; text-align: center; }
+        .container { max-width: 900px; margin: 30px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background-color: #e67e22; color: white; padding: 12px; text-align: left; }
+        td { padding: 12px; border-bottom: 1px solid #ddd; }
+        tr:hover { background-color: #f9f9f9; }
+        .badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+        .pago-efectivo { background: #dcfce7; color: #166534; }
+        .pago-tarjeta { background: #dbeafe; color: #1e40af; }
+        .btn-regresar { display: inline-block; margin-bottom: 20px; color: #e67e22; text-decoration: none; font-weight: bold; }
+        /* Estilos para los nuevos botones de cobro */
+        .btn-cobrar { border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-right: 5px; }
+        .btn-efectivo { background: #27ae60; color: white; }
+        .btn-tarjeta { background: #2980b9; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1> Reporte de Ventas del Día</h1>
+    </div>
+    <div class="container">
+        <a href="/menu" class="btn-regresar">↩ Regresar al Menú</a>
+        <table>
+            <thead>
+                <tr>
+                    <th>Ticket #</th> <th>Cliente / Hora</th>
+<th>Productos</th>
+<th>Cant.</th>
+<th>Total Venta</th>
+<th>Método</th>
+                </tr>
+            </thead>
+            <tbody id="tabla-cuerpo">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+async function cargarVentas() {
+    const token = localStorage.getItem('authToken'); 
+    const response = await fetch('/api/reporte/detallado', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const ventas = await response.json();
+    const tabla = document.getElementById('tabla-cuerpo');
+    
+    tabla.innerHTML = ventas.map(v => {
+        let botonPago = "";
+        if (v.metodo_pago === 'Pendiente') {
+            // Cobramos por ID de Ticket, mucho más preciso
+            // Dentro del .map de cargarVentas en reportedeventas.html
+botonPago = `
+    <button onclick="cobrarPorTicket(${v.ticket_id}, 'Efectivo', event)" style="background:#27ae60; ...">💵 Efec.</button>
+    <button onclick="cobrarPorTicket(${v.ticket_id}, 'Tarjeta', event)" style="background:#2980b9; ...">💳 Tarj.</button>
+`;
+        } else {
+            botonPago = `<span class="badge ${v.metodo_pago === 'Efectivo' ? 'pago-efectivo' : 'pago-tarjeta'}">${v.metodo_pago}</span>`;
+        }
+
+        return `
+            <tr>
+                <td><strong>#${v.ticket_id}</strong></td> <td><strong>${v.cliente}</strong><br><small>${v.fecha.split(' ')[1]}</small></td>
+                <td style="font-size: 0.9em;">${v.productos}</td>
+                <td>${v.total_items}</td>
+                <td><strong>$${v.gran_total.toFixed(2)}</strong></td>
+                <td>${botonPago}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+
+// Esta función cobra una sola fila usando su ID único
+async function cobrarVentaGrupo(cliente, fecha, metodo) {
+    const token = localStorage.getItem('authToken'); // Asegúrate que sea authToken
+    try {
+        const response = await fetch('http://127.0.0.1:5001/api/cobrar/grupo', {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ 
+                cliente: cliente, 
+                fecha: fecha, 
+                metodo_pago: metodo 
+            })
+        });
+
+        if (response.ok) {
+            alert("✅ Venta cobrada correctamente");
+            cargarVentas(); // Recarga la tabla
+        } else {
+            alert("❌ Error al procesar el cobro");
+        }
+    } catch (error) {
+        console.error("Error:", error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', cargarVentas);
+
+async function cobrarPorTicket(ticketId, metodo) {
+    const token = localStorage.getItem('authToken');
+    let montoRecibido = 0;
+    
+    // 1. Lógica de calculadora de cambio para Efectivo
+    if (metodo === 'Efectivo') {
+        // Buscamos el total de la venta directamente de la fila de la tabla
+        const fila = event.target.closest('tr');
+        const totalTexto = fila.querySelector('td:nth-child(5) strong').innerText; // Extrae "$115.00"
+        const totalVenta = parseFloat(totalTexto.replace('$', ''));
+
+        const pago = prompt(`Total a cobrar: $${totalVenta.toFixed(2)}\n¿Con cuánto paga el cliente?`);
+        
+        if (pago === null) return; // Si cancela el prompt, no hace nada
+        
+        mRecibido = parseFloat(pago);
+
+        if (isNaN(mRecibido) || mRecibido < totalVenta) {
+            alert("Monto insuficiente o inválido.");
+            return;
+        }
+
+        const cambio = mRecibido - totalVenta;
+        alert(` CAMBIO A ENTREGAR: $${cambio.toFixed(2)}`);
+    }
+
+    // 2. Proceso de actualización en la base de datos
+    try {
+        const response = await fetch(`/api/cobrar/ticket/${ticketId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ metodo_pago: metodo })
+        });
+
+        if (response.ok) {
+            // No es necesaria la alerta de éxito si ya mostramos el cambio
+            cargarVentas(); 
+        } else {
+            const err = await response.json();
+            alert("Error al cobrar: " + err.message);
+        }
+    } catch (error) {
+        console.error("Error:", error);
+    }
+}
+
+// Ejemplo de cómo agrupar en el JS de cocina.html
+function renderizarPedidos(pedidos) {
+    const contenedor = document.getElementById('contenedor-pedidos');
+    const grupos = {};
+
+    // Agrupamos los productos por su ticket_id
+    pedidos.forEach(p => {
+        if (!grupos[p.ticket_id]) grupos[p.ticket_id] = [];
+        grupos[p.ticket_id].push(p);
+    });
+
+    contenedor.innerHTML = Object.keys(grupos).map(tid => {
+        const items = grupos[tid];
+        const cliente = items[0].cliente;
+        
+        const listaProductos = items.map(i => `<li>${i.cantidad}x ${i.producto}</li>`).join('');
+
+        return `
+            <div class="card-pedido">
+                <div class="card-header">
+                    <strong>${cliente}</strong> <span>#${tid}</span>
+                </div>
+                <ul>${listaProductos}</ul>
+                <button class="btn-listo" onclick="marcarComoListo(${tid})">
+                    MARCAR COMO LISTO
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+async function marcarComoListo(ticketId) {
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`/api/cocina/finalizar_ticket/${ticketId}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (response.ok) {
+        location.reload(); // Recarga para limpiar el pedido terminado
+    } else {
+        alert("Error al actualizar el pedido");
+    }
+}function renderizarPedidos(pedidos) {
+    const contenedor = document.getElementById('contenedor-pedidos');
+    const grupos = {};
+
+    // Agrupamos los productos por su ticket_id
+    pedidos.forEach(p => {
+        if (!grupos[p.ticket_id]) grupos[p.ticket_id] = [];
+        grupos[p.ticket_id].push(p);
+    });
+
+    contenedor.innerHTML = Object.keys(grupos).map(tid => {
+        const items = grupos[tid];
+        const cliente = items[0].cliente;
+        
+        const listaProductos = items.map(i => `<li>${i.cantidad}x ${i.producto}</li>`).join('');
+
+        return `
+            <div class="card-pedido">
+                <div class="card-header">
+                    <strong>${cliente}</strong> <span>#${tid}</span>
+                </div>
+                <ul>${listaProductos}</ul>
+                <button class="btn-listo" onclick="marcarComoListo(${tid})">
+                    MARCAR COMO LISTO
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+async function marcarComoListo(ticketId) {
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`/api/cocina/finalizar_ticket/${ticketId}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (response.ok) {
+        location.reload(); // Recarga para limpiar el pedido terminado
+    } else {
+        alert("Error al actualizar el pedido");
+    }
+}
+
+    </script>
+</body>
+</html>

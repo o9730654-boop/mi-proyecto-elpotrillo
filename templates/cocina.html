@@ -10,84 +10,58 @@
             --proceso: #3498db;
             --fondo: #f0f2f5;
             --oscuro: #2c3e50;
+            --verde: #27ae60;
         }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--fondo); margin: 0; padding: 20px; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--fondo); margin: 0; padding: 20px; }
         
-        /* Contenedor del encabezado para alinear botón y título */
         .header-container { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            border-bottom: 2px solid #bdc3c7;   
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            display: flex; align-items: center; justify-content: space-between; 
+            border-bottom: 2px solid #bdc3c7; padding-bottom: 10px; margin-bottom: 20px;
         }
         
-        h1 { margin: 0; color: var(--oscuro); flex-grow: 1; text-align: center; }
+        h1 { margin: 0; color: var(--oscuro); text-align: center; flex-grow: 1; }
 
-        /* Estilo del botón de volver */
         .btn-back {
-            background-color: var(--oscuro);
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: bold;
-            transition: 0.3s;
-            border: none;
-            cursor: pointer;
+            background-color: var(--oscuro); color: white; text-decoration: none;
+            padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none;
         }
-        .btn-back:hover { background-color: #34495e; opacity: 0.9; }
         
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         
-        /* Estilo de la Comanda */
-        .card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.2s; }
-        .card:hover { transform: translateY(-5px); }
-        
-        .card-header { padding: 15px; color: white; display: flex; justify-content: space-between; align-items: center; }
-        .card-header.Pendiente { background: var(--pendiente); }
-        .card-header.EnProceso { background: var(--proceso); }
-        
-        .card-body { padding: 20px; min-height: 100px; }
-        .item-row { display: flex; justify-content: space-between; font-size: 1.2em; margin-bottom: 10px; border-bottom: 1px dashed #eee; padding-bottom: 5px; }
-        
-        .card-footer { padding: 15px; background: #fafafa; }
-        
-        .btn { width: 100%; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 1em; cursor: pointer; color: white; transition: 0.3s; }
-        .btn-start { background: var(--proceso); }
-        .btn-start:hover { background: #2980b9; }
-        .btn-done { background: #27ae60; }
-        .btn-done:hover { background: #219150; }
-
-        .loading {
-            text-align: center;
-            color: #666;
-            padding: 40px;
-            font-size: 18px;
+        /* Estilo de la Tarjeta de Pedido */
+        .card-pedido { 
+            background: white; border-radius: 12px; overflow: hidden; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column;
         }
-
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-            text-align: center;
+        
+        .card-header { 
+            padding: 15px; background: var(--pendiente); color: white; 
+            display: flex; justify-content: space-between; align-items: center; 
         }
+        
+        .card-body { padding: 20px; flex-grow: 1; }
+        .card-body ul { list-style: none; padding: 0; margin: 0; }
+        .card-body li { 
+            font-size: 1.2em; padding: 8px 0; border-bottom: 1px dashed #eee; 
+            display: flex; justify-content: space-between;
+        }
+        
+        .btn-listo { 
+            width: 100%; border: none; padding: 15px; background: var(--verde); 
+            color: white; font-weight: bold; font-size: 1em; cursor: pointer; transition: 0.3s;
+        }
+        .btn-listo:hover { background: #219150; }
     </style>
 </head>
 <body>
 
     <div class="header-container">
-        <button class="btn-back" onclick="window.location.href='/menu'">⬅ Volver al Menú</button>
-        <h1>👨‍🍳 Panel de Control de Cocina</h1>
-        <div style="width: 140px;"></div>
+        <button class="btn-back" onclick="window.location.href='/menu'">⬅ Volver</button>
+        <h1> Panel de Cocina</h1>
+        <div style="width: 100px;"></div>
     </div>
 
-    <div id="pedidos-container" class="grid">
-        <div class="loading">Cargando pedidos...</div>
-    </div>
+    <div id="pedidos-container" class="grid"></div>
 
     <script>
     // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN (Se mantiene igual)
@@ -118,89 +92,75 @@
             const response = await fetchWithToken('/api/cocina/pedidos', { method: 'GET' });
             if (!response || !response.ok) return;
             const pedidos = await response.json();
-            renderPedidos(pedidos);
+            renderizarPedidos(pedidos);
         } catch (error) { 
             console.error("Error cargando cocina:", error);
         }
     }
 
-    function renderPedidos(pedidos) {
-        const container = document.getElementById('pedidos-container');
-        
-        // 1. LIMPIEZA TOTAL: Esto evita que se amontonen las tarjetas viejas
-        container.innerHTML = '';
+    function renderizarPedidos(pedidos) {
+    const contenedor = document.getElementById('pedidos-container');
+    const grupos = {};
 
-        if (pedidos.length === 0) {
-            container.innerHTML = '<div class="loading">✅ No hay pedidos pendientes</div>';
-            return;
-        }
+    // Agrupamos por ticket_id
+    pedidos.forEach(p => {
+        if (!grupos[p.ticket_id]) grupos[p.ticket_id] = [];
+        grupos[p.ticket_id].push(p);
+    });
 
-        // 2. AGRUPACIÓN POR ID ÚNICO: Evita duplicados visuales por cliente
-        const ordenes = pedidos.reduce((acc, item) => {
-            if (!acc[item.id]) {
-                acc[item.id] = { 
-                    cliente: item.cliente, 
-                    items: [], 
-                    estado: item.estado, 
-                    id: item.id 
-                };
-            }
-            acc[item.id].items.push(item);
-            return acc;
-        }, {});
+    const html = Object.keys(grupos).map(tid => {
+        const items = grupos[tid];
+        const cliente = items[0].cliente;
+        // Creamos la lista de productos
+        const lista = items.map(i => `<li><strong>${i.cantidad}x</strong> ${i.producto}</li>`).join('');
 
-        // 3. RENDERIZADO LIMPIO
-        for (const id in ordenes) {
-            const orden = ordenes[id];
-            const card = document.createElement('div');
-            card.className = 'card';
-            
-            const estadoClass = orden.estado.replace(/\s+/g, ''); // Quita espacios para la clase CSS
-            
-            card.innerHTML = `
-                <div class="card-header ${estadoClass}">
-                    <span><strong>${orden.cliente.toUpperCase()}</strong></span>
-                    <span>${orden.estado}</span>
+        return `
+            <div class="card-pedido">
+                <div class="card-header">
+                    <span> ${cliente}</span>
+                    <span>#${tid}</span>
                 </div>
                 <div class="card-body">
-                    ${orden.items.map(i => `
-                        <div class="item-row">
-                            <span>${i.cantidad}x ${i.producto}</span>
-                        </div>
-                    `).join('')}
+                    <ul>${lista}</ul>
                 </div>
-                <div class="card-footer">
-                    ${orden.estado === 'Pendiente' ? 
-                        `<button class="btn btn-start" onclick="actualizarPedido(${orden.id}, 'En Proceso')">EMPEZAR COCINA</button>` : 
-                        `<button class="btn btn-done" onclick="actualizarPedido(${orden.id}, 'Terminado')">MARCAR COMO LISTO</button>`
-                    }
-                </div>
-            `;
-            container.appendChild(card);
+                <button class="btn-listo" onclick="marcarComoListo(${tid})">
+                    MARCAR COMO LISTO 
+                </button>
+            </div>
+        `;
+    }).join('');
+
+    contenedor.innerHTML = html || '<h2 style="text-align:center; grid-column: 1/-1;">No hay pedidos hoy </h2>';
+}
+
+// 3. Esta función avisa al servidor que ya terminaste
+async function marcarComoListo(ticketId) {
+    const token = localStorage.getItem('authToken');
+    try {
+        const response = await fetch(`http://127.0.0.1:5001/api/cocina/finalizar_ticket/${ticketId}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            fetchPedidos(); // Recargamos la lista automáticamente
+        } else {
+            alert("Error al actualizar el pedido");
         }
+    } catch (error) {
+        console.error("Error:", error);
     }
+}
 
-    async function actualizarPedido(id, nuevoEstado) {
-        try {
-            // Se usa PUT para coincidir con la ruta de Flaskk.py
-            const response = await fetchWithToken(`/api/cocina/actualizar/${id}`, {
-                method: 'PUT',
-                body: JSON.stringify({ estado: nuevoEstado })
-            });
+// EJECUCIÓN INICIAL
+document.addEventListener('DOMContentLoaded', fetchPedidos);
 
-            if (response && response.ok) {
-                // Actualiza la vista inmediatamente después del cambio
-                fetchPedidos(); 
-            } else {
-                alert('Error al actualizar el pedido');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Error de conexión');
-        }
-    }
+// AUTO-ACTUALIZAR CADA 20 SEGUNDOS (Para que el cocinero no tenga que refrescar)
+setInterval(fetchPedidos,5000);
 
-    // Inicio y ciclo de actualización cada 5 segundos
-    fetchPedidos();
-    setInterval(fetchPedidos, 5000);
-</script>
+        // Ejecutar carga inicial y actualizar cada 30 segundos
+        fetchPedidos();
+        setInterval(fetchPedidos, 30000);
+    </script>
+</body>
+</html>
