@@ -74,17 +74,16 @@ function logout() {
             }
             
             return data.map(item => {
-                // Normalizamos: tomamos la primera clave que coincida sin importar el case
-                const keys = Object.keys(item);
-                const getName  = keys.find(k => k.toLowerCase() === 'mnu_nombre_plato');
-                const getDesc  = keys.find(k => k.toLowerCase() === 'mnu_descripcion');
-                const getPrice = keys.find(k => k.toLowerCase() === 'mnu_precio');
-                console.log('Item keys:', keys, '-> nombre:', getName, item[getName]);
+                // Las columnas en PostgreSQL están en minúsculas
+                const name  = item.mnu_nombre_plato || item.Mnu_nombre_plato || '';
+                const desc  = item.mnu_descripcion  || item.Mnu_descripcion  || '';
+                const price = parseFloat(item.mnu_precio || item.Mnu_precio  || 0);
+                console.log('Item:', name, price);
                 return {
-                    name:     item[getName],
-                    desc:     item[getDesc],
-                    price:    item[getPrice],
-                    category: classifyCategory(item[getName])
+                    name:     name,
+                    desc:     desc,
+                    price:    price,
+                    category: classifyCategory(name)
                 };
             });
         } catch (error) {
@@ -103,7 +102,7 @@ function logout() {
         return 'Comida'; 
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
+    async function iniciarMenu() {
         const items = await loadMenu(); 
         const grouped = items.reduce((acc, item) => {
             if (!acc[item.category]) acc[item.category] = [];
@@ -159,7 +158,14 @@ function logout() {
             menuEl.appendChild(section);
         });
         document.getElementById('year').textContent = new Date().getFullYear();
-    });
+    }
+
+    // Llamamos directamente — funciona tanto si el DOM ya cargó como si no
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', iniciarMenu);
+    } else {
+        iniciarMenu();
+    }
 
     let cart = [];
     function addToCart(item) {
