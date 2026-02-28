@@ -63,46 +63,46 @@
     </div>
 
     <script>
-       document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
 
-    const username = document.getElementById('username-input').value;
-    const password = document.getElementById('password-input').value;
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password })
+                });
 
-    try {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: username, password: password })
-        });
+                const data = await response.json();
 
-        const data = await response.json();
+                if (response.ok) {
+                    localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('userRol', data.rol);
 
-        if (response.ok) {
-            // Guardamos token y rol para usar en las siguientes pantallas
-            localStorage.setItem('authToken', data.token);
-            localStorage.setItem('userRol', data.rol);
+                    const destinos = {
+                        'cocinero': '/cocina',
+                        'hoster':   '/mesas',
+                        'mesero':   '/menu',
+                        'cajero':   '/reporte-ventas',
+                        'admin':    '/menu'
+                    };
 
-            // Lógica de redirección por rol
-            const destinos = {
-                'cocinero': '/cocina',
-                'hoster':   '/mesas',
-                'mesero':   '/menu',
-                'cajero':   '/reporte-ventas',
-                'admin':    '/menu' // El admin suele ir al menú o un dashboard general
-            };
+                    window.location.href = destinos[data.rol] || '/menu';
 
-            // Si el rol existe en nuestro mapa, redirigimos; si no, al menú por defecto
-            window.location.href = destinos[data.rol] || '/menu';
-            
-        } else {
-            alert('Error: ' + data.message);
+                } else {
+                    document.getElementById('error').textContent = data.message;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('error').textContent = 'Error de conexión con el servidor.';
+            }
         }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error de conexión con el servidor.');
-    }
-});
+
+        // También permite hacer login presionando Enter
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') login();
+        });
     </script>
 </body>
 </html>

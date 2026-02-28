@@ -51,118 +51,186 @@ def reporte_page():
 def view_cocina():
     return render_template('cocina.html')
 
+@app.route('/reporte-ventas')
+def reporte_ventas_page():
+    return render_template('reportedeventas.html')
+
 @app.route('/api/reporte/corte', methods=['GET'])
 @login_required
 def get_corte_reporte(current_user):
     conn = get_db_connection()
-    cur = conn.cursor()
-    fecha_actual = datetime.datetime.now().strftime('%d/%m/%Y')
+    hoy_sql = "date('now', 'localtime')"
+    
     try:
-        # Suma de efectivo
-        cur.execute("SELECT SUM(precio * cantidad) as total FROM formulario WHERE fecha = CURRENT_DATE AND metodo_pago = 'Efectivo'")
-        efectivo = cur.fetchone()['total'] or 0
+        # Obtenemos la fecha actual para el reporte
+        fecha_actual = conn.execute(f"SELECT {hoy_sql}").fetchone()[0]
         
-        # Suma de tarjeta
-        cur.execute("SELECT SUM(precio * cantidad) as total FROM formulario WHERE fecha = CURRENT_DATE AND metodo_pago = 'Tarjeta'")
-        tarjeta = cur.fetchone()['total'] or 0
-        
-        # CAMBIO AQUÍ: Contar todos los registros del día en lugar de clientes distintos
-        cur.execute("SELECT COUNT(DISTINCT cliente) as total FROM formulario WHERE fecha = CURRENT_DATE")
-        transacciones = cur.fetchone()['total'] or 0
+        efectivo = conn.execute(f"SELECT SUM(precio * cantidad) FROM formulario WHERE date(fecha) = {hoy_sql} AND metodo_pago = 'Efectivo'").fetchone()[0] or 0
+        tarjeta = conn.execute(f"SELECT SUM(precio * cantidad) FROM formulario WHERE date(fecha) = {hoy_sql} AND metodo_pago = 'Tarjeta'").fetchone()[0] or 0
         
         return jsonify({
-            'fecha_corte': fecha_actual,
+            'fecha_corte': fecha_actual, # Esto es lo que lee tu document.getElementById('fecha-corte')
             'ventas_efectivo': float(efectivo),
             'ventas_tarjeta': float(tarjeta),
-            'total_general': float(efectivo + tarjeta),
-            'num_transacciones': int(transacciones)
+            'total_general': float(efectivo + tarjeta)
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        cur.close()
         conn.close()
 
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
     conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        cur.execute('SELECT mnu_nombre_plato, mnu_descripcion, mnu_precio FROM menu')
-        menu_items = cur.fetchall()
-        return jsonify(menu_items), 200
+        menu_items = conn.execute('SELECT Mnu_nombre_plato, Mnu_descripcion, Mnu_precio FROM menu').fetchall()
+        return jsonify([dict(row) for row in menu_items]), 200
     except Exception as e:
         return jsonify({'message': str(e)}), 500
     finally:
-        cur.close()
-        conn.close()
+     conn.close()
 
 @app.route('/api/cocina/pedidos', methods=['GET'])
 @login_required
 def get_pedidos_cocina(current_user):
     conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        # Importante: Asegúrate que tu tabla tenga columna 'id'
-        cur.execute("SELECT id, cliente, producto, cantidad, estado FROM formulario WHERE estado != 'Terminado' ORDER BY id DESC")
-        pedidos = cur.fetchall()
-        return jsonify(pedidos), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        cur.close()
-        conn.close()
+    # Traemos solo los pendientes del día actual
+    pedidos = conn.execute("""
+        SELECT ticket_id, cliente, producto, cantidad, estado 
+        FROM formulario 
+        WHERE estado = 'Pendiente' 
+          AND DATE(fecha) = DATE('now', 'localtime')
+        ORDER BY ticket_id ASC
+    """).fetchall()
+    conn.close()
+    return jsonify([dict(p) for p in pedidos])
 
 @app.route('/api/checkout', methods=['POST'])
 @login_required 
 def register_sale(current_user):
     data = request.get_json()
+    cliente = data.get('cliente', 'Mostrador')
+    metodo = data.get('metodo_pago', 'Pendiente') 
     items = data.get('items', [])
+    ahora = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
     conn = get_db_connection()
-    cur = conn.cursor()
     try:
+        # 1. Obtener el último ticket
+        ultimo = conn.execute("SELECT MAX(ticket_id) FROM formulario").fetchone()[0]
+        nuevo_ticket = (ultimo or 0) + 1
+
         for item in items:
-            cur.execute(
-                "INSERT INTO formulario (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado) VALUES (%s, %s, %s, %s, %s, CURRENT_DATE, %s, %s)",
-                (data.get('cliente', 'Mostrador'), "", item['name'], item['price'], item['qty'], data.get('metodo_pago', 'Efectivo'), 'Pendiente')
-            )
+            # 2. INSERT CORREGIDO: Cuenta bien las columnas (9) y los ? (9)
+            conn.execute(
+                """INSERT INTO formulario (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado, ticket_id) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (cliente, "", item['name'], item['price'], item['qty'], ahora, metodo, 'Pendiente', nuevo_ticket))
+        
         conn.commit()
-        return jsonify({'message': 'Venta registrada'}), 201
+        return jsonify({'message': 'Venta registrada', 'ticket': nuevo_ticket}), 201
     except Exception as e:
-        return jsonify({'message': str(e)}), 500
+        # Esto imprimirá el error real en tu terminal negra (Consola)
+        print(f"ERROR EN BASE DE DATOS: {e}") 
+        return jsonify({'message': f'Error al guardar: {str(e)}'}), 500
     finally:
-        cur.close()
         conn.close()
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
-    if data.get('username') == "admin" and data.get('password') == "12345":
-        token = jwt.encode({'user_id': 1, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, SECRET_KEY, algorithm="HS256")
-        return jsonify({'message': 'Éxito', 'token': token}), 200 
+    username = data.get('username')
+    password = data.get('password')
+
+    # Definición de usuarios y sus permisos
+    usuarios = {
+        "admin":    {"pass": "12345",   "rol": "admin"},
+        "cocina":   {"pass": "1", "rol": "cocinero"},
+        "hoster":   {"pass": "2", "rol": "hoster"},
+        "mesero":   {"pass": "3","rol": "mesero"},
+        "cajero":   {"pass": "4",  "rol": "cajero"}
+    }
+
+    user_data = usuarios.get(username)
+    if user_data and user_data['pass'] == password:
+        token_payload = {
+            'user_id': username,
+            'rol': user_data['rol'], # Guardamos el rol en el token
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+        }
+        token = jwt.encode(token_payload, SECRET_KEY, algorithm="HS256")
+        return jsonify({
+            'message': 'Éxito', 
+            'token': token, 
+            'rol': user_data['rol'] 
+        }), 200 
     return jsonify({'message': 'Credenciales incorrectas'}), 401
-@app.route('/api/cocina/actualizar/<int:pedido_id>', methods=['PUT'])
+
+@app.route('/api/reporte/detallado', methods=['GET'])
 @login_required
-def actualizar_estado_pedido(current_user, pedido_id):
-    data = request.get_json()
-    nuevo_estado = data.get('estado')
-    
+def get_reporte_detallado(current_user):
     conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        # En Postgres usamos %s para el ID y el estado
-        cur.execute(
-            "UPDATE formulario SET estado = %s WHERE id = %s",
-            (nuevo_estado, pedido_id)
-        )
-        conn.commit()
-        return jsonify({'message': 'Estado actualizado'}), 200
-    except Exception as e:
-        print(f"Error actualizando pedido: {e}")
-        return jsonify({'error': str(e)}), 500
+        # Agrupamos por ticket_id para mostrar una sola fila por venta
+        ventas = conn.execute("""
+            SELECT 
+                ticket_id,
+                cliente, 
+                GROUP_CONCAT(producto || ' (' || cantidad || ')', '<br>') as productos, 
+                SUM(cantidad) as total_items,
+                SUM(precio * cantidad) as gran_total, 
+                metodo_pago,
+                fecha 
+            FROM formulario 
+            WHERE DATE(fecha) = DATE('now', 'localtime')
+            GROUP BY ticket_id, cliente, fecha, metodo_pago
+            ORDER BY ticket_id DESC
+        """).fetchall()
+        return jsonify([dict(row) for row in ventas]), 200
     finally:
-        cur.close()
         conn.close()
+
+@app.route('/api/cocina/finalizar_ticket/<int:tid>', methods=['POST'])
+@login_required
+def finalizar_ticket(current_user, tid):
+    conn = get_db_connection()
+    try:
+        # Marcamos todos los productos del ticket como Terminado
+        conn.execute("UPDATE formulario SET estado = 'Terminado' WHERE ticket_id = ?", (tid,))
+        conn.commit()
+        return jsonify({'message': f'Ticket #{tid} listo'}), 200
+    finally:
+        conn.close()
+
+@app.route('/api/cobrar/ticket/<int:tid>', methods=['PUT'])
+@login_required
+def cobrar_ticket_id(current_user, tid):
+    data = request.get_json()
+    metodo = data.get('metodo_pago')
+    conn = get_db_connection()
+    try:
+        # Actualizamos el método de pago para todo el ticket
+        conn.execute("UPDATE formulario SET metodo_pago = ? WHERE ticket_id = ?", (metodo, tid))
+        conn.commit()
+        return jsonify({'message': 'Cobro realizado con éxito'}), 200
+    finally:
+        conn.close()
+
+@app.route('/api/notificaciones/listos', methods=['GET'])
+@login_required
+def obtener_notificaciones(current_user):
+    conn = get_db_connection()
+    # Buscamos tickets que pasaron a 'Terminado' en los últimos 2 minutos
+    # y que sean del día de hoy
+    pedidos_listos = conn.execute("""
+        SELECT DISTINCT ticket_id, cliente 
+        FROM formulario 
+        WHERE estado = 'Terminado' 
+        AND DATE(fecha) = DATE('now', 'localtime')
+        LIMIT 5
+    """).fetchall()
+    conn.close()
+    return jsonify([dict(p) for p in pedidos_listos])     
         
 @app.route('/loaderio-02da15920fabcf6b26e0709c27fafdd9.txt')
 def verify_loader_io():
