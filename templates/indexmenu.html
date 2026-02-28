@@ -57,21 +57,40 @@ function logout() {
     async function loadMenu() {
         try {
             const response = await fetch('/api/menu');
+            const rawText = await response.text();
+            console.log('API /api/menu respuesta raw:', rawText);
+            
             if (!response.ok) {
-                const errorData = await response.json(); 
-                throw new Error(errorData.message || 'Error desconocido.');
+                throw new Error('Error HTTP ' + response.status + ': ' + rawText);
             }
-            const data = await response.json();
-            return data.map(item => ({
-                // PostgreSQL puede devolver columnas en minúsculas o con el case original
-                name: item.Mnu_nombre_plato || item.mnu_nombre_plato,
-                desc: item.Mnu_descripcion  || item.mnu_descripcion,
-                price: item.Mnu_precio      || item.mnu_precio,
-                category: classifyCategory(item.Mnu_nombre_plato || item.mnu_nombre_plato)
-            }));
+            
+            const data = JSON.parse(rawText);
+            console.log('Items recibidos:', data.length, data);
+            
+            if (data.length === 0) {
+                document.getElementById('menu').innerHTML = 
+                    '<p style="color:red;padding:20px">⚠️ La API devolvió 0 productos. Revisa la consola del navegador (F12).</p>';
+                return [];
+            }
+            
+            return data.map(item => {
+                // Normalizamos: tomamos la primera clave que coincida sin importar el case
+                const keys = Object.keys(item);
+                const getName  = keys.find(k => k.toLowerCase() === 'mnu_nombre_plato');
+                const getDesc  = keys.find(k => k.toLowerCase() === 'mnu_descripcion');
+                const getPrice = keys.find(k => k.toLowerCase() === 'mnu_precio');
+                console.log('Item keys:', keys, '-> nombre:', getName, item[getName]);
+                return {
+                    name:     item[getName],
+                    desc:     item[getDesc],
+                    price:    item[getPrice],
+                    category: classifyCategory(item[getName])
+                };
+            });
         } catch (error) {
-            console.error('Error:', error);
-            alert('Error al cargar el menú: ' + error.message);
+            console.error('Error cargando menú:', error);
+            document.getElementById('menu').innerHTML = 
+                '<p style="color:red;padding:20px">❌ Error: ' + error.message + '</p>';
             return []; 
         }
     }
