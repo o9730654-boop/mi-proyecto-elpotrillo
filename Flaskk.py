@@ -289,6 +289,56 @@ def obtener_notificaciones(current_user):
     finally:
         conn.close()
 
+
+# ─── RUTA DE DIAGNÓSTICO (temporal) ─────────────────────────────────────────
+@app.route('/api/debug/tablas', methods=['GET'])
+def debug_tablas():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # Ver todas las tablas del schema public
+            cur.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+                ORDER BY table_name
+            """)
+            tablas = [r['table_name'] for r in cur.fetchall()]
+
+            # Ver columnas de la tabla menu (cualquier variante)
+            cur.execute("""
+                SELECT table_name, column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public'
+                  AND lower(table_name) IN ('menu', 'formulario')
+                ORDER BY table_name, ordinal_position
+            """)
+            columnas = [dict(r) for r in cur.fetchall()]
+
+            # Intentar leer las primeras 2 filas de menu directamente
+            muestra = []
+            try:
+                cur.execute("SELECT * FROM menu LIMIT 2")
+                muestra = [dict(r) for r in cur.fetchall()]
+            except Exception as e1:
+                try:
+                    conn.rollback()
+                    cur.execute('SELECT * FROM "Menu" LIMIT 2')
+                    muestra = [dict(r) for r in cur.fetchall()]
+                except Exception as e2:
+                    muestra = [f"error minusc: {e1}", f"error mayusc: {e2}"]
+
+        return jsonify({
+            'tablas_publicas': tablas,
+            'columnas_menu_formulario': columnas,
+            'muestra_datos': muestra
+        }), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 @app.route('/loaderio-02da15920fabcf6b26e0709c27fafdd9.txt')
 def verify_loader_io():
     return "loaderio-02da15920fabcf6b26e0709c27fafdd9"
