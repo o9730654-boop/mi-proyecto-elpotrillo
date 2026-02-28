@@ -48,29 +48,6 @@
 </footer>
 
 <script>
-// Función auxiliar para peticiones autenticadas
-async function fetchWithToken(url, options = {}) {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-        alert('Error de sesión. Inicia sesión de nuevo.');
-        window.location.href = '/';
-        return null;
-    }
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        ...(options.headers || {})
-    };
-    const response = await fetch(url, { ...options, headers });
-    if (response.status === 401) {
-        alert('Sesión expirada. Inicia sesión de nuevo.');
-        localStorage.removeItem('authToken');
-        window.location.href = '/';
-        return null;
-    }
-    return response;
-}
-
 function logout() {
         localStorage.removeItem('authToken'); 
         alert('Sesión cerrada.');
@@ -86,10 +63,11 @@ function logout() {
             }
             const data = await response.json();
             return data.map(item => ({
-                name: item.Mnu_nombre_plato,   
-                desc: item.Mnu_descripcion,    
-                price: item.Mnu_precio,        
-                category: classifyCategory(item.Mnu_nombre_plato) 
+                // PostgreSQL puede devolver columnas en minúsculas o con el case original
+                name: item.Mnu_nombre_plato || item.mnu_nombre_plato,
+                desc: item.Mnu_descripcion  || item.mnu_descripcion,
+                price: item.Mnu_precio      || item.mnu_precio,
+                category: classifyCategory(item.Mnu_nombre_plato || item.mnu_nombre_plato)
             }));
         } catch (error) {
             console.error('Error:', error);
