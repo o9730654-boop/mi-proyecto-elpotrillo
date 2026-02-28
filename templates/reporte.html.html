@@ -10,10 +10,8 @@
         .info-row span { font-weight: 600; }
         .total-box { background: #e67e22; color: white; padding: 20px; text-align: center; border-radius: 8px; margin-top: 25px; font-size: 1.4rem; font-weight: bold; }
         .balance-status { margin-top: 20px; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; display: none; }
-        .status-ok { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-        .status-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-        .btn { padding: 12px; background-color: #e67e22; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; width: 100%; margin-top: 20px; }
-        .btn:hover { background-color: #d35400; }
+        .btn { padding: 12px; background-color: #c34a36; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; width: 100%; margin-top: 20px; font-size: 1rem; }
+        .btn:hover { background-color: #a93226; }
         h2 { text-align: center; color: #e67e22; margin-top: 0; }
     </style>
 </head>
@@ -28,254 +26,80 @@
     </header>
 
     <div class="report-card">
-        <h2 style="text-align:center; color: var(--accent);">✂️ Corte de Caja Diario</h2>
+        <h2>✂️ Corte de Caja Diario</h2>
         <div class="info-row"><span>📅 Fecha del Corte:</span> <span id="fecha-corte">Cargando...</span></div>
         <div class="info-row"><span>💵 Ventas Efectivo:</span> <span id="ventas-efectivo">$0.00</span></div>
-        <div class="info-row"><span>💳 Ventas Tarjeta:</span> <span id="ventas-tarjeta">$0.00</span></div>
-        
+        <div class="info-row"><span>💳 Ventas Tarjeta:</span>  <span id="ventas-tarjeta">$0.00</span></div>
         <div class="total-box">Total en Sistema: $<span id="total-general">0.00</span></div>
 
         <div id="balance-result" class="balance-status"></div>
-        
-        <button class="btn" style="width:100%; margin-top:20px; padding:12px; background-color: #c34a36; color: white; border: none; border-radius: 8px; cursor: pointer;" 
-        onclick="verificarCaja()">
-    🔍 Verificar Caja Física
-</button>
 
-<div id="balance-result" style="margin-top: 15px; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; display: none;"></div>
+        <button class="btn" onclick="verificarCaja()">🔍 Verificar Caja Física</button>
+    </div>
 
     <script>
-        // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN
-        async function fetchWithToken(url, options = {}) {
-            const token = localStorage.getItem('token');
-            
-            if (!token) {
-                alert('Error de sesión. Inicia sesión de nuevo.');
-                window.location.href = '/';
-                return null;
-            }
-
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-                ...options.headers
-            };
-
-            const response = await fetch(url, {
-                ...options,
-                headers
-            });
-
-            if (response.status === 401) {
-                alert('Sesión expirada. Por favor inicia sesión de nuevo.');
-                localStorage.removeItem('token');
-                window.location.href = '/';
-                return null;
-            }
-
-            return response;
-        }
-
-        // Variable global para guardar lo que el sistema dice que hay en efectivo
-        let efectivoEnSistema = 0;
-
-        async function cargarReporte() {
-            const token = localStorage.getItem('authToken');
-            try {
-                const response = await fetchWithToken('/api/reporte/corte', {
+    async function cargarReporte() {
+        const token = localStorage.getItem('authToken');
+        try {
+            const response = await fetch('/api/reporte/corte', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-               const data = await response.json();
-            
+            if (response.status === 401) {
+                alert('Sesión expirada. Inicia sesión de nuevo.');
+                window.location.href = '/';
+                return;
+            }
+
+            const data = await response.json();
+
             if (response.ok) {
-                document.getElementById('fecha-corte').textContent = data.fecha_corte;
+                document.getElementById('fecha-corte').textContent     = data.fecha_corte;
                 document.getElementById('ventas-efectivo').textContent = `$${data.ventas_efectivo.toFixed(2)}`;
-                document.getElementById('ventas-tarjeta').textContent = `$${data.ventas_tarjeta.toFixed(2)}`;
-                document.getElementById('total-general').textContent = data.total_general.toFixed(2);
-                
-                // Guardamos el valor para la comparación posterior
-                efectivoEnSistema = data.ventas_efectivo;
+                document.getElementById('ventas-tarjeta').textContent  = `$${data.ventas_tarjeta.toFixed(2)}`;
+                document.getElementById('total-general').textContent   = data.total_general.toFixed(2);
+            } else {
+                console.error('Error del servidor:', data);
             }
         } catch (error) {
-            console.error("Error al cargar:", error);
+            console.error('Error al cargar reporte:', error);
         }
     }
 
-// Esta es la función que hace que el botón funcione
     function verificarCaja() {
-    // 1. Obtenemos lo que el sistema dice que hay en ambos métodos
-    const ventasEfectivo = parseFloat(document.getElementById('ventas-efectivo').textContent.replace('$', '')) || 0;
-    const ventasTarjeta = parseFloat(document.getElementById('ventas-tarjeta').textContent.replace('$', '')) || 0;
-    
-    // El total que debería haber sumando vouchers y billetes
-    const totalEsperado = ventasEfectivo + ventasTarjeta;
+        const ventasEfectivo = parseFloat(document.getElementById('ventas-efectivo').textContent.replace('$', '')) || 0;
+        const ventasTarjeta  = parseFloat(document.getElementById('ventas-tarjeta').textContent.replace('$', ''))  || 0;
+        const totalEsperado  = ventasEfectivo + ventasTarjeta;
 
-    const fisico = prompt(" Ingrese el TOTAL real (Suma de Efectivo + Vouchers de Tarjeta):");
-    
-    if (fisico === null || fisico === "") return;
-    
-    const cantFisica = parseFloat(fisico);
-    if (isNaN(cantFisica)) {
-        alert("Por favor, ingrese un número válido.");
-        return;
+        const fisico = prompt(`Ingrese el TOTAL real (Efectivo + Vouchers de Tarjeta):\nTotal esperado en sistema: $${totalEsperado.toFixed(2)}`);
+        if (fisico === null || fisico === '') return;
+
+        const cantFisica = parseFloat(fisico);
+        if (isNaN(cantFisica)) {
+            alert('Por favor, ingrese un número válido.');
+            return;
+        }
+
+        const diferencia = cantFisica - totalEsperado;
+        const resDiv = document.getElementById('balance-result');
+        resDiv.style.display = 'block';
+
+        if (Math.abs(diferencia) < 0.01) {
+            resDiv.innerHTML = `✅ Caja Cuadrada Perfectamente<br><small>Esperado: $${totalEsperado.toFixed(2)}</small>`;
+            resDiv.style.backgroundColor = '#dcfce7';
+            resDiv.style.color = '#166534';
+        } else if (diferencia > 0) {
+            resDiv.innerHTML = `💰 Sobrante: $${diferencia.toFixed(2)}`;
+            resDiv.style.backgroundColor = '#dcfce7';
+            resDiv.style.color = '#166534';
+        } else {
+            resDiv.innerHTML = `⚠️ Faltante: $${Math.abs(diferencia).toFixed(2)}`;
+            resDiv.style.backgroundColor = '#fee2e2';
+            resDiv.style.color = '#991b1b';
+        }
     }
-
-    const diferencia = cantFisica - totalEsperado;
-    const resDiv = document.getElementById('balance-result');
-    resDiv.style.display = "block";
-
-    if (Math.abs(diferencia) < 0.01) {
-        resDiv.innerHTML = `✅ Caja Cuadrada Perfectamente<br><small>(Esperado: $${totalEsperado.toFixed(2)})</small>`;
-        resDiv.style.backgroundColor = "#dcfce7";
-        resDiv.style.color = "#166534";
-    } else if (diferencia > 0) {
-        resDiv.innerHTML = `💰 Sobrante: $${diferencia.toFixed(2)}<br><small></small>`;
-        resDiv.style.backgroundColor = "#dcfce7";
-        resDiv.style.color = "#166534";
-    } else {
-        resDiv.innerHTML = `⚠️ Faltante: $${Math.abs(diferencia).toFixed(2)}<br><small></small>`;
-        resDiv.style.backgroundColor = "#fee2e2";
-        resDiv.style.color = "#991b1b";
-    }
-}
 
     document.addEventListener('DOMContentLoaded', cargarReporte);
-</script>
-    </div>
-
-<script>
-// Agrega esta función al final de tu <script>
-async function finalizarVenta(metodo) {
-    if (cart.length === 0) { 
-        alert("Tu carrito está vacío."); 
-        return; 
-    }
-
-    const cliente = prompt("Nombre del cliente:", "Venta de Mostrador");
-    if (cliente === null) return; 
-
-    const token = localStorage.getItem('authToken');
-    if (!token) { 
-        alert("Error de sesión. Por favor inicia sesión de nuevo."); 
-        return; 
-    }
-
-    try {// Esta es la función que hace que el botón funcione
-    function verificarCaja() {
-    // 1. Obtenemos lo que el sistema dice que hay en ambos métodos
-    const ventasEfectivo = parseFloat(document.getElementById('ventas-efectivo').textContent.replace('$', '')) || 0;
-    const ventasTarjeta = parseFloat(document.getElementById('ventas-tarjeta').textContent.replace('$', '')) || 0;
-    
-    // El total que debería haber sumando vouchers y billetes
-    const totalEsperado = ventasEfectivo + ventasTarjeta;
-
-    const fisico = prompt(" Ingrese el TOTAL real (Suma de Efectivo + Vouchers de Tarjeta):");
-    
-    if (fisico === null || fisico === "") return;
-    
-    const cantFisica = parseFloat(fisico);
-    if (isNaN(cantFisica)) {
-        alert("Por favor, ingrese un número válido.");
-        return;
-    }
-
-    const diferencia = cantFisica - totalEsperado;
-    const resDiv = document.getElementById('balance-result');
-    resDiv.style.display = "block";
-
-    if (Math.abs(diferencia) < 0.01) {
-        resDiv.innerHTML = `✅ Caja Cuadrada Perfectamente<br><small>(Esperado: $${totalEsperado.toFixed(2)})</small>`;
-        resDiv.style.backgroundColor = "#dcfce7";
-        resDiv.style.color = "#166534";
-    } else if (diferencia > 0) {
-        resDiv.innerHTML = `💰 Sobrante: $${diferencia.toFixed(2)}<br><small></small>`;
-        resDiv.style.backgroundColor = "#dcfce7";
-        resDiv.style.color = "#166534";
-    } else {
-        resDiv.innerHTML = `⚠️ Faltante: $${Math.abs(diferencia).toFixed(2)}<br><small></small>`;
-        resDiv.style.backgroundColor = "#fee2e2";
-        resDiv.style.color = "#991b1b";
-    }
-}
-
-    document.addEventListener('DOMContentLoaded', cargarReporte);
-</script>
-    </div>
-
-<script>
-// Agrega esta función al final de tu <script>
-async function finalizarVenta(metodo) {
-    if (cart.length === 0) { 
-        alert("Tu carrito está vacío."); 
-        return; 
-    }
-
-    const cliente = prompt("Nombre del cliente:", "Venta de Mostrador");
-    if (cliente === null) return; 
-
-    const token = localStorage.getItem('authToken');
-    if (!token) { 
-        alert("Error de sesión. Por favor inicia sesión de nuevo."); 
-        return; 
-    }
-
-    try {
-        const response = await fetchWithToken('/api/reporte/corte', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${token}` 
-            },
-            body: JSON.stringify({ 
-                cliente: cliente, 
-                telefono: "", 
-                metodo_pago: metodo, // "Efectivo" o "Tarjeta"
-                items: cart 
-            })
-        });
-         const data = await response.json();
-
-        if (response.ok) {
-            alert(`✅ Venta guardada con ${metodo}.`);
-            cart = []; 
-            renderCart(); // Limpia la lista visual
-        } else {
-            const errorRes = await response.json();
-            alert('❌ Error: ' + (errorRes.message || 'No se pudo guardar.'));
-        }
-    } catch (error) {
-        console.error('Error de red:', error);
-        alert('Error de conexión con el servidor.');
-    }
-}
-         const response = await fetchWithToken('/api/reporte/corte', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${token}` 
-            },
-            body: JSON.stringify({ 
-                cliente: cliente, 
-                telefono: "", 
-                metodo_pago: metodo, // "Efectivo" o "Tarjeta"
-                items: cart 
-            })
-        });
-
-        if (response.ok) {
-            alert(`✅ Venta guardada con ${metodo}.`);
-            cart = []; 
-            renderCart(); // Limpia la lista visual
-        } else {
-            const errorRes = await response.json();
-            alert('❌ Error: ' + (errorRes.message || 'No se pudo guardar.'));
-        }
-    } catch (error) {
-        console.error('Error de red:', error);
-        alert('Error de conexión con el servidor.');
-    }
-}
-</script>
+    </script>
 </body>
 </html>

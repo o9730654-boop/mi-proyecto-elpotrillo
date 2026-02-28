@@ -7,7 +7,6 @@
     <style>
         :root {
             --pendiente: #e67e22;
-            --proceso: #3498db;
             --fondo: #f0f2f5;
             --oscuro: #2c3e50;
             --verde: #27ae60;
@@ -18,7 +17,6 @@
             display: flex; align-items: center; justify-content: space-between; 
             border-bottom: 2px solid #bdc3c7; padding-bottom: 10px; margin-bottom: 20px;
         }
-        
         h1 { margin: 0; color: var(--oscuro); text-align: center; flex-grow: 1; }
 
         .btn-back {
@@ -28,24 +26,20 @@
         
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         
-        /* Estilo de la Tarjeta de Pedido */
         .card-pedido { 
             background: white; border-radius: 12px; overflow: hidden; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column;
         }
-        
         .card-header { 
             padding: 15px; background: var(--pendiente); color: white; 
             display: flex; justify-content: space-between; align-items: center; 
         }
-        
         .card-body { padding: 20px; flex-grow: 1; }
         .card-body ul { list-style: none; padding: 0; margin: 0; }
         .card-body li { 
             font-size: 1.2em; padding: 8px 0; border-bottom: 1px dashed #eee; 
             display: flex; justify-content: space-between;
         }
-        
         .btn-listo { 
             width: 100%; border: none; padding: 15px; background: var(--verde); 
             color: white; font-weight: bold; font-size: 1em; cursor: pointer; transition: 0.3s;
@@ -57,16 +51,20 @@
 
     <div class="header-container">
         <button class="btn-back" onclick="window.location.href='/menu'">⬅ Volver</button>
-        <h1> Panel de Cocina</h1>
+        <h1>🍳 Panel de Cocina</h1>
         <div style="width: 100px;"></div>
     </div>
 
     <div id="pedidos-container" class="grid"></div>
 
     <script>
-    // FUNCIÓN AUXILIAR PARA PETICIONES CON TOKEN (Se mantiene igual)
+    // Clave correcta: 'authToken' (igual que en indexlogin.html)
+    function getToken() {
+        return localStorage.getItem('authToken');
+    }
+
     async function fetchWithToken(url, options = {}) {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) {
             alert('Error de sesión. Inicia sesión de nuevo.');
             window.location.href = '/';
@@ -80,7 +78,7 @@
         const response = await fetch(url, { ...options, headers });
         if (response.status === 401) {
             alert('Sesión expirada.');
-            localStorage.removeItem('token');
+            localStorage.removeItem('authToken');
             window.location.href = '/';
             return null;
         }
@@ -99,68 +97,56 @@
     }
 
     function renderizarPedidos(pedidos) {
-    const contenedor = document.getElementById('pedidos-container');
-    const grupos = {};
+        const contenedor = document.getElementById('pedidos-container');
+        const grupos = {};
 
-    // Agrupamos por ticket_id
-    pedidos.forEach(p => {
-        if (!grupos[p.ticket_id]) grupos[p.ticket_id] = [];
-        grupos[p.ticket_id].push(p);
-    });
-
-    const html = Object.keys(grupos).map(tid => {
-        const items = grupos[tid];
-        const cliente = items[0].cliente;
-        // Creamos la lista de productos
-        const lista = items.map(i => `<li><strong>${i.cantidad}x</strong> ${i.producto}</li>`).join('');
-
-        return `
-            <div class="card-pedido">
-                <div class="card-header">
-                    <span> ${cliente}</span>
-                    <span>#${tid}</span>
-                </div>
-                <div class="card-body">
-                    <ul>${lista}</ul>
-                </div>
-                <button class="btn-listo" onclick="marcarComoListo(${tid})">
-                    MARCAR COMO LISTO 
-                </button>
-            </div>
-        `;
-    }).join('');
-
-    contenedor.innerHTML = html || '<h2 style="text-align:center; grid-column: 1/-1;">No hay pedidos hoy </h2>';
-}
-
-// 3. Esta función avisa al servidor que ya terminaste
-async function marcarComoListo(ticketId) {
-    const token = localStorage.getItem('authToken');
-    try {
-        const response = await fetch(`http://127.0.0.1:5001/api/cocina/finalizar_ticket/${ticketId}`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
+        pedidos.forEach(p => {
+            if (!grupos[p.ticket_id]) grupos[p.ticket_id] = [];
+            grupos[p.ticket_id].push(p);
         });
 
-        if (response.ok) {
-            fetchPedidos(); // Recargamos la lista automáticamente
-        } else {
-            alert("Error al actualizar el pedido");
-        }
-    } catch (error) {
-        console.error("Error:", error);
+        const html = Object.keys(grupos).map(tid => {
+            const items = grupos[tid];
+            const cliente = items[0].cliente;
+            const lista = items.map(i => `<li><strong>${i.cantidad}x</strong> ${i.producto}</li>`).join('');
+
+            return `
+                <div class="card-pedido">
+                    <div class="card-header">
+                        <span>👤 ${cliente}</span>
+                        <span>#${tid}</span>
+                    </div>
+                    <div class="card-body">
+                        <ul>${lista}</ul>
+                    </div>
+                    <button class="btn-listo" onclick="marcarComoListo(${tid})">
+                        ✅ MARCAR COMO LISTO
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        contenedor.innerHTML = html || '<h2 style="text-align:center; grid-column: 1/-1;">✅ No hay pedidos pendientes</h2>';
     }
-}
 
-// EJECUCIÓN INICIAL
-document.addEventListener('DOMContentLoaded', fetchPedidos);
+    async function marcarComoListo(ticketId) {
+        try {
+            const response = await fetchWithToken(`/api/cocina/finalizar_ticket/${ticketId}`, {
+                method: 'POST'
+            });
+            if (response && response.ok) {
+                fetchPedidos();
+            } else {
+                alert("Error al actualizar el pedido");
+            }
+        } catch (error) {
+            console.error("Error:", error);
+        }
+    }
 
-// AUTO-ACTUALIZAR CADA 20 SEGUNDOS (Para que el cocinero no tenga que refrescar)
-setInterval(fetchPedidos,5000);
-
-        // Ejecutar carga inicial y actualizar cada 30 segundos
-        fetchPedidos();
-        setInterval(fetchPedidos, 30000);
+    // Carga inicial + refresco cada 10 segundos
+    document.addEventListener('DOMContentLoaded', fetchPedidos);
+    setInterval(fetchPedidos, 10000);
     </script>
 </body>
 </html>

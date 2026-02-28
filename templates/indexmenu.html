@@ -48,6 +48,29 @@
 </footer>
 
 <script>
+// Función auxiliar para peticiones autenticadas
+async function fetchWithToken(url, options = {}) {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        alert('Error de sesión. Inicia sesión de nuevo.');
+        window.location.href = '/';
+        return null;
+    }
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...(options.headers || {})
+    };
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401) {
+        alert('Sesión expirada. Inicia sesión de nuevo.');
+        localStorage.removeItem('authToken');
+        window.location.href = '/';
+        return null;
+    }
+    return response;
+}
+
 function logout() {
         localStorage.removeItem('authToken'); 
         alert('Sesión cerrada.');
