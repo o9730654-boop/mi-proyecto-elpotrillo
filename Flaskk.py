@@ -88,30 +88,34 @@ def get_menu():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            # Detectamos los nombres reales de columnas para evitar errores de case
             cur.execute("""
-                SELECT
-                    "Mnu_nombre_plato" AS "Mnu_nombre_plato",
-                    "Mnu_descripcion"  AS "Mnu_descripcion",
-                    "Mnu_precio"       AS "Mnu_precio"
-                FROM "Menu"
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE lower(table_name) = 'menu'
+                ORDER BY ordinal_position
             """)
+            cols = [r['column_name'] for r in cur.fetchall()]
+
+            nombre_col = next((c for c in cols if c.lower() == 'mnu_nombre_plato'), None)
+            desc_col   = next((c for c in cols if c.lower() == 'mnu_descripcion'),  None)
+            precio_col = next((c for c in cols if c.lower() == 'mnu_precio'),       None)
+
+            if not nombre_col:
+                return jsonify({'message': f'Columnas no encontradas. Disponibles: {cols}'}), 500
+
+            cur.execute(f'''
+                SELECT
+                    "{nombre_col}" AS "Mnu_nombre_plato",
+                    "{desc_col}"   AS "Mnu_descripcion",
+                    "{precio_col}" AS "Mnu_precio"
+                FROM menu
+            ''')
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
     except Exception as e:
-        # Si falla con comillas (tabla/columnas en minúsculas en Postgres), intentamos sin comillas
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT
-                        mnu_nombre_plato AS "Mnu_nombre_plato",
-                        mnu_descripcion  AS "Mnu_descripcion",
-                        mnu_precio       AS "Mnu_precio"
-                    FROM menu
-                """)
-                rows = cur.fetchall()
-            return jsonify([dict(r) for r in rows]), 200
-        except Exception as e2:
-            return jsonify({'message': str(e2)}), 500
+        conn.rollback()
+        return jsonify({'message': str(e)}), 500
     finally:
         conn.close()
 
