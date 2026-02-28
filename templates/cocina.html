@@ -58,6 +58,27 @@
     <div id="pedidos-container" class="grid"></div>
 
     <script>
+
+    // ─── CONTROL DE ACCESO POR ROL ───────────────────────────────────────────────
+    (function() {
+        const token = localStorage.getItem('authToken');
+        const rol   = localStorage.getItem('userRol');
+        if (!token || !rol) { window.location.href = '/'; return; }
+        const rolesPermitidos = ["cocinero", "admin"];
+        if (!rolesPermitidos.includes(rol)) {
+            const destinos = {
+                'cocinero': '/cocina',
+                'hoster':   '/mesas',
+                'mesero':   '/menu',
+                'cajero':   '/reporte-ventas',
+                'admin':    '/menu'
+            };
+            alert('No tienes permiso para acceder a esta sección.');
+            window.location.href = destinos[rol] || '/';
+        }
+    })();
+    // ─────────────────────────────────────────────────────────────────────────────
+
     // Clave correcta: 'authToken' (igual que en indexlogin.html)
     function getToken() {
         return localStorage.getItem('authToken');

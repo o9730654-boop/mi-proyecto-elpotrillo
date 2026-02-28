@@ -124,6 +124,27 @@
     <button id="btn-reset">Limpiar todas las mesas</button>
 
     <script>
+
+    // ─── CONTROL DE ACCESO POR ROL ───────────────────────────────────────────────
+    (function() {
+        const token = localStorage.getItem('authToken');
+        const rol   = localStorage.getItem('userRol');
+        if (!token || !rol) { window.location.href = '/'; return; }
+        const rolesPermitidos = ["hoster", "admin"];
+        if (!rolesPermitidos.includes(rol)) {
+            const destinos = {
+                'cocinero': '/cocina',
+                'hoster':   '/mesas',
+                'mesero':   '/menu',
+                'cajero':   '/reporte-ventas',
+                'admin':    '/menu'
+            };
+            alert('No tienes permiso para acceder a esta sección.');
+            window.location.href = destinos[rol] || '/';
+        }
+    })();
+    // ─────────────────────────────────────────────────────────────────────────────
+
         /* --- LÓGICA (JAVASCRIPT) --- */
         document.addEventListener('DOMContentLoaded', () => {
             const mesas = document.querySelectorAll('.mesa');

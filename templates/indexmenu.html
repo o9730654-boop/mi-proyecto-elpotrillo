@@ -48,6 +48,55 @@
 </footer>
 
 <script>
+
+    // ─── CONTROL DE ACCESO POR ROL ───────────────────────────────────────────────
+    (function() {
+        const token = localStorage.getItem('authToken');
+        const rol   = localStorage.getItem('userRol');
+        if (!token || !rol) { window.location.href = '/'; return; }
+        const rolesPermitidos = ["mesero", "admin"];
+        if (!rolesPermitidos.includes(rol)) {
+            const destinos = {
+                'cocinero': '/cocina',
+                'hoster':   '/mesas',
+                'mesero':   '/menu',
+                'cajero':   '/reporte-ventas',
+                'admin':    '/menu'
+            };
+            alert('No tienes permiso para acceder a esta sección.');
+            window.location.href = destinos[rol] || '/';
+        }
+    })();
+    // ─────────────────────────────────────────────────────────────────────────────
+
+
+    // ─── FILTRO DE NAVBAR SEGÚN ROL ──────────────────────────────────────────────
+    (function filtrarNavbar() {
+        const rol = localStorage.getItem('userRol');
+        // Links visibles por rol (los que NO están en esta lista se ocultan)
+        const navPermitido = {
+            'mesero':   ['#Comida', '#Bebida', '#Licuados'],
+            'cajero':   ['/reporte-ventas', '/reporte'],
+            'cocinero': ['/cocina'],
+            'hoster':   ['/mesas'],
+            'admin':    null  // null = ve todo
+        };
+
+        const permitidos = navPermitido[rol];
+        if (!permitidos) return; // admin ve todo
+
+        document.querySelectorAll('.main-nav a').forEach(link => {
+            const href = link.getAttribute('href') || '';
+            const onclick = link.getAttribute('onclick') || '';
+            // Siempre mostrar el botón de cerrar sesión
+            if (onclick.includes('logout')) return;
+            // Ocultar si el href no está en la lista de permitidos
+            const visible = permitidos.some(p => href.includes(p));
+            if (!visible) link.style.display = 'none';
+        });
+    })();
+    // ─────────────────────────────────────────────────────────────────────────────
+
 function logout() {
         localStorage.removeItem('authToken'); 
         alert('Sesión cerrada.');

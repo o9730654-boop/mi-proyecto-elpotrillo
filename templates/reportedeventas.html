@@ -43,6 +43,27 @@
     </div>
 
     <script>
+
+    // ─── CONTROL DE ACCESO POR ROL ───────────────────────────────────────────────
+    (function() {
+        const token = localStorage.getItem('authToken');
+        const rol   = localStorage.getItem('userRol');
+        if (!token || !rol) { window.location.href = '/'; return; }
+        const rolesPermitidos = ["cajero", "admin"];
+        if (!rolesPermitidos.includes(rol)) {
+            const destinos = {
+                'cocinero': '/cocina',
+                'hoster':   '/mesas',
+                'mesero':   '/menu',
+                'cajero':   '/reporte-ventas',
+                'admin':    '/menu'
+            };
+            alert('No tienes permiso para acceder a esta sección.');
+            window.location.href = destinos[rol] || '/';
+        }
+    })();
+    // ─────────────────────────────────────────────────────────────────────────────
+
     async function cargarVentas() {
         const token = localStorage.getItem('authToken'); 
         try {
