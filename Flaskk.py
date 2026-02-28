@@ -99,7 +99,7 @@ def get_menu():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute('SELECT "Mnu_nombre_plato", "Mnu_descripcion", "Mnu_precio" FROM menu')
+            cur.execute('SELECT "mnu_nombre_plato", "mnu_descripcion", "mnu_precio" FROM menu')
             menu_items = cur.fetchall()
         return jsonify([dict(row) for row in menu_items]), 200
     except Exception as e:
