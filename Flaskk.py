@@ -67,7 +67,7 @@ def get_corte_reporte(current_user):
         tarjeta = cur.fetchone()['total'] or 0
         
         # CAMBIO AQUÍ: Contar todos los registros del día en lugar de clientes distintos
-        cur.execute("SELECT COUNT(*) as total FROM formulario WHERE fecha = CURRENT_DATE")
+        cur.execute("SELECT COUNT(DISTINCT cliente) as total FROM formulario WHERE fecha = CURRENT_DATE")
         transacciones = cur.fetchone()['total'] or 0
         
         return jsonify({
