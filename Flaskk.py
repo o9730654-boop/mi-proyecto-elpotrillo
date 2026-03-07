@@ -210,7 +210,7 @@ def get_reporte_detallado(current_user):
                 SELECT ticket_id, cliente,
                     STRING_AGG(producto || ' (' || cantidad || ')', '<br>' ORDER BY producto) AS productos,
                     SUM(cantidad) AS total_items, SUM(precio * cantidad) AS gran_total,
-                    metodo_pago, MAX(fecha) AS fecha
+                    metodo_pago, TO_CHAR(MAX(fecha), 'YYYY-MM-DD HH24:MI:SS') AS fecha
                 FROM formulario
                 WHERE DATE(fecha) = CURRENT_DATE
                 GROUP BY ticket_id, cliente, metodo_pago
@@ -250,11 +250,24 @@ def finalizar_ticket(current_user, tid):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("UPDATE formulario SET estado='Terminado' WHERE ticket_id=%s", (tid,))
+            # Detectar nombre real de columna estado en formulario
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema='public' AND lower(table_name)='formulario'
+                ORDER BY ordinal_position
+            """)
+            cols = [r['column_name'] for r in cur.fetchall()]
+            estado_col   = next((c for c in cols if c.lower() == 'estado'),    'estado')
+            ticket_col   = next((c for c in cols if c.lower() == 'ticket_id'), 'ticket_id')
+            cur.execute(
+                f'UPDATE formulario SET "{estado_col}"=\'Terminado\' WHERE "{ticket_col}"=%s',
+                (tid,)
+            )
         conn.commit()
         return jsonify({'message': f'Ticket #{tid} listo'}), 200
     except Exception as e:
         conn.rollback()
+        print(f'ERROR finalizar_ticket: {e}')
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
@@ -496,8 +509,8 @@ def debug_tablas():
         with conn.cursor() as cur:
             cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
             tablas = [r['table_name'] for r in cur.fetchall()]
-            cur.execute("""SELECT column_name, data_type FROM information_schema.columns
-                WHERE table_schema='public' AND lower(table_name) IN ('inventario','recetas','menu')
+            cur.execute("""SELECT table_name, column_name, data_type FROM information_schema.columns
+                WHERE table_schema='public' AND lower(table_name) IN ('inventario','recetas','menu','formulario')
                 ORDER BY table_name, ordinal_position""")
             cols = [dict(r) for r in cur.fetchall()]
         return jsonify({'tablas': tablas, 'columnas': cols}), 200

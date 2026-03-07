@@ -16,9 +16,6 @@
         .pago-tarjeta  { background: #dbeafe; color: #1e40af; }
         .pago-pendiente { background: #fef9c3; color: #854d0e; }
         .btn-regresar { display: inline-block; margin-bottom: 20px; color: #e67e22; text-decoration: none; font-weight: bold; }
-        .btn-corte { display: inline-block; margin-bottom: 20px; margin-left: 15px; background: #e67e22; color: white; text-decoration: none; font-weight: bold; padding: 8px 16px; border-radius: 6px; }
-        .btn-corte:hover { background: #cf6d17; }
-        .nav-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
         .btn-cobrar { border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-right: 5px; }
         .btn-efectivo { background: #27ae60; color: white; }
         .btn-tarjeta  { background: #2980b9; color: white; }
@@ -29,7 +26,7 @@
         <h1> Consulta de ventas del dia</h1>
     </div>
     <div class="container">
-        <div class="nav-bar"><a href="/menu" class="btn-regresar">↩ Regresar al Menú</a><a href="/reporte" class="btn-corte"> Corte de Caja</a></div>
+        <a href="/menu" class="btn-regresar">↩ Regresar al Menú</a>
         <table>
             <thead>
                 <tr>
@@ -100,7 +97,17 @@
                     botonPago = `<span class="badge ${cls}">${v.metodo_pago}</span>`;
                 }
 
-                const hora = v.fecha ? v.fecha.split(' ')[1] || v.fecha : '';
+                const hora = (() => {
+                    if (!v.fecha) return '';
+                    // Puede venir como "2026-03-07 14:32:00" o como objeto Date
+                    const f = new Date(v.fecha);
+                    if (!isNaN(f)) {
+                        return f.toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit', hour12: true});
+                    }
+                    // fallback: tomar parte después del espacio
+                    const partes = String(v.fecha).split(' ');
+                    return partes.length > 1 ? partes[1].substring(0,5) : v.fecha;
+                })();
                 return `
                     <tr>
                         <td><strong>#${v.ticket_id}</strong></td>
