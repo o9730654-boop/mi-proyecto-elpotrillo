@@ -31,29 +31,6 @@ def login_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
-# ─── INIT: solo crea tabla recetas si no existe ───────────────────────────────
-def init_db():
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            # La tabla inventario ya existe con sus columnas originales.
-            # Solo creamos recetas referenciando id_insumo.
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS recetas (
-                    id              SERIAL PRIMARY KEY,
-                    nombre_platillo VARCHAR(150) NOT NULL,
-                    id_ingrediente  INTEGER REFERENCES inventario(id_insumo) ON DELETE CASCADE,
-                    cantidad_usar   NUMERIC(10,2) NOT NULL
-                )
-            """)
-        conn.commit()
-        print("init_db OK")
-    except Exception as e:
-        conn.rollback()
-        print(f"init_db error: {e}")
-    finally:
-        conn.close()
-
 # ─── RUTAS HTML ───────────────────────────────────────────────────────────────
 @app.route('/')
 def index():
@@ -118,13 +95,15 @@ def get_menu():
                 WHERE lower(table_name) = 'menu' ORDER BY ordinal_position
             """)
             cols = [r['column_name'] for r in cur.fetchall()]
+            id_col     = next((c for c in cols if c.lower() == 'id_plato'), None)
             nombre_col = next((c for c in cols if c.lower() == 'mnu_nombre_plato'), None)
             desc_col   = next((c for c in cols if c.lower() == 'mnu_descripcion'),  None)
             precio_col = next((c for c in cols if c.lower() == 'mnu_precio'),       None)
             if not nombre_col:
                 return jsonify({'message': f'Columnas no encontradas: {cols}'}), 500
             cur.execute(f'''
-                SELECT "{nombre_col}" AS "Mnu_nombre_plato",
+                SELECT "{id_col}"     AS "id_plato",
+                       "{nombre_col}" AS "Mnu_nombre_plato",
                        "{desc_col}"   AS "Mnu_descripcion",
                        "{precio_col}" AS "Mnu_precio"
                 FROM menu
@@ -169,7 +148,18 @@ def register_sale(current_user):
         with conn.cursor() as cur:
             cur.execute("SELECT COALESCE(MAX(ticket_id), 0) AS max_id FROM formulario")
             nuevo_ticket = cur.fetchone()['max_id'] + 1
+
+            # Obtener columnas del menú dinámicamente
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE lower(table_name)='menu' ORDER BY ordinal_position
+            """)
+            cols = [r['column_name'] for r in cur.fetchall()]
+            id_col     = next((c for c in cols if c.lower() == 'id_plato'), None)
+            nombre_col = next((c for c in cols if c.lower() == 'mnu_nombre_plato'), None)
+
             for item in items:
+                # Registrar en formulario
                 cur.execute(
                     """INSERT INTO formulario
                        (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado, ticket_id)
@@ -177,19 +167,29 @@ def register_sale(current_user):
                     (cliente, "", item['name'], item['price'], item['qty'],
                      ahora, metodo, 'Pendiente', nuevo_ticket)
                 )
-                # Descontar ingredientes usando columnas reales de inventario
-                cur.execute("""
-                    SELECT r.id_ingrediente, r.cantidad_usar, i.cantidad_actual
-                    FROM recetas r
-                    JOIN inventario i ON i.id_insumo = r.id_ingrediente
-                    WHERE lower(r.nombre_platillo) = lower(%s)
-                """, (item['name'],))
-                for ing in cur.fetchall():
-                    nuevo_stock = max(0, float(ing['cantidad_actual']) - float(ing['cantidad_usar']) * item['qty'])
+
+                # Buscar id_plato por nombre del platillo
+                if id_col and nombre_col:
                     cur.execute(
-                        "UPDATE inventario SET cantidad_actual=%s, fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s",
-                        (nuevo_stock, ing['id_ingrediente'])
+                        f'SELECT "{id_col}" AS id_plato FROM menu WHERE lower("{nombre_col}") = lower(%s)',
+                        (item['name'],)
                     )
+                    plato = cur.fetchone()
+                    if plato:
+                        # Buscar receta y descontar ingredientes
+                        cur.execute("""
+                            SELECT r.id_insumo, r.cantidad_requerida, i.cantidad_actual
+                            FROM recetas r
+                            JOIN inventario i ON i.id_insumo = r.id_insumo
+                            WHERE r.id_plato = %s
+                        """, (plato['id_plato'],))
+                        for ing in cur.fetchall():
+                            nuevo_stock = max(0, float(ing['cantidad_actual']) - float(ing['cantidad_requerida']) * item['qty'])
+                            cur.execute(
+                                "UPDATE inventario SET cantidad_actual=%s, fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s",
+                                (nuevo_stock, ing['id_insumo'])
+                            )
+
         conn.commit()
         return jsonify({'message': 'Venta registrada', 'ticket': nuevo_ticket}), 201
     except Exception as e:
@@ -288,7 +288,7 @@ def obtener_notificaciones(current_user):
     finally:
         conn.close()
 
-# ─── API: INVENTARIO (columnas reales) ───────────────────────────────────────
+# ─── API: INVENTARIO ─────────────────────────────────────────────────────────
 @app.route('/api/inventario', methods=['GET'])
 @login_required
 def get_inventario(current_user):
@@ -383,14 +383,11 @@ def ajustar_stock(current_user, iid):
     try:
         with conn.cursor() as cur:
             if tipo == 'sumar':
-                cur.execute("""UPDATE inventario SET cantidad_actual=cantidad_actual+%s,
-                    fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual""", (cant, iid))
+                cur.execute("UPDATE inventario SET cantidad_actual=cantidad_actual+%s, fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual", (cant, iid))
             elif tipo == 'restar':
-                cur.execute("""UPDATE inventario SET cantidad_actual=GREATEST(0,cantidad_actual-%s),
-                    fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual""", (cant, iid))
+                cur.execute("UPDATE inventario SET cantidad_actual=GREATEST(0,cantidad_actual-%s), fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual", (cant, iid))
             else:
-                cur.execute("""UPDATE inventario SET cantidad_actual=%s,
-                    fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual""", (cant, iid))
+                cur.execute("UPDATE inventario SET cantidad_actual=%s, fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual", (cant, iid))
             row = cur.fetchone()
         conn.commit()
         return jsonify({'cantidad': float(row['cantidad_actual'])}), 200
@@ -400,18 +397,31 @@ def ajustar_stock(current_user, iid):
     finally:
         conn.close()
 
-# ─── API: RECETAS ─────────────────────────────────────────────────────────────
+# ─── API: RECETAS (columnas reales: id_plato, id_insumo, cantidad_requerida) ──
 @app.route('/api/recetas', methods=['GET'])
 @login_required
 def get_recetas(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            # Traer recetas unidas con nombre del platillo y nombre del insumo
             cur.execute("""
-                SELECT r.id, r.nombre_platillo, r.id_ingrediente,
-                       r.cantidad_usar, i.nombre_insumo AS ingrediente, i.unidad_medida AS unidad
-                FROM recetas r JOIN inventario i ON i.id_insumo = r.id_ingrediente
-                ORDER BY r.nombre_platillo, i.nombre_insumo
+                SELECT column_name FROM information_schema.columns
+                WHERE lower(table_name)='menu' ORDER BY ordinal_position
+            """)
+            cols       = [r['column_name'] for r in cur.fetchall()]
+            id_col     = next((c for c in cols if c.lower() == 'id_plato'), 'id_plato')
+            nombre_col = next((c for c in cols if c.lower() == 'mnu_nombre_plato'), 'mnu_nombre_plato')
+
+            cur.execute(f"""
+                SELECT r.id_plato, r.id_insumo, r.cantidad_requerida,
+                       m."{nombre_col}" AS nombre_platillo,
+                       i.nombre_insumo  AS ingrediente,
+                       i.unidad_medida  AS unidad
+                FROM recetas r
+                JOIN menu      m ON m."{id_col}" = r.id_plato
+                JOIN inventario i ON i.id_insumo  = r.id_insumo
+                ORDER BY m."{nombre_col}", i.nombre_insumo
             """)
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
@@ -428,9 +438,10 @@ def crear_receta(current_user):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO recetas (nombre_platillo, id_ingrediente, cantidad_usar)
-                VALUES (%s,%s,%s) RETURNING *
-            """, (d['nombre_platillo'], d['id_ingrediente'], d['cantidad_usar']))
+                INSERT INTO recetas (id_plato, id_insumo, cantidad_requerida)
+                VALUES (%s, %s, %s)
+                RETURNING *
+            """, (d['id_plato'], d['id_ingrediente'], d['cantidad_usar']))
             row = dict(cur.fetchone())
         conn.commit()
         return jsonify(row), 201
@@ -440,17 +451,39 @@ def crear_receta(current_user):
     finally:
         conn.close()
 
-@app.route('/api/recetas/<int:rid>', methods=['DELETE'])
+@app.route('/api/recetas/<int:id_plato>/<int:id_insumo>', methods=['DELETE'])
 @login_required
-def eliminar_receta(current_user, rid):
+def eliminar_receta(current_user, id_plato, id_insumo):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM recetas WHERE id=%s", (rid,))
+            cur.execute("DELETE FROM recetas WHERE id_plato=%s AND id_insumo=%s", (id_plato, id_insumo))
         conn.commit()
         return jsonify({'message': 'Eliminado'}), 200
     except Exception as e:
         conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+# ─── API: MENÚ PARA RECETAS (id + nombre) ────────────────────────────────────
+@app.route('/api/menu/lista', methods=['GET'])
+@login_required
+def get_menu_lista(current_user):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE lower(table_name)='menu' ORDER BY ordinal_position
+            """)
+            cols       = [r['column_name'] for r in cur.fetchall()]
+            id_col     = next((c for c in cols if c.lower() == 'id_plato'), None)
+            nombre_col = next((c for c in cols if c.lower() == 'mnu_nombre_plato'), None)
+            cur.execute(f'SELECT "{id_col}" AS id, "{nombre_col}" AS nombre FROM menu ORDER BY "{nombre_col}"')
+            rows = cur.fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
@@ -464,9 +497,10 @@ def debug_tablas():
             cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
             tablas = [r['table_name'] for r in cur.fetchall()]
             cur.execute("""SELECT column_name, data_type FROM information_schema.columns
-                WHERE table_schema='public' AND lower(table_name)='inventario' ORDER BY ordinal_position""")
+                WHERE table_schema='public' AND lower(table_name) IN ('inventario','recetas','menu')
+                ORDER BY table_name, ordinal_position""")
             cols = [dict(r) for r in cur.fetchall()]
-        return jsonify({'tablas': tablas, 'columnas_inventario': cols}), 200
+        return jsonify({'tablas': tablas, 'columnas': cols}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({'error': str(e)}), 500
@@ -478,6 +512,5 @@ def verify_loader_io():
     return "loaderio-02da15920fabcf6b26e0709c27fafdd9"
 
 if __name__ == '__main__':
-    init_db()
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
