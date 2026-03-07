@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario - El Potrillo</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --naranja: #e67e22;
+            --naranja-dark: #cf6d17;
+            --oscuro: #1a2332;
+            --fondo: #f4f6f9;
+            --verde: #16a34a;
+            --verde-bg: #dcfce7;
+            --verde-txt: #14532d;
+            --rojo: #dc2626;
+            --rojo-bg: #fee2e2;
+            --rojo-txt: #7f1d1d;
+            --amarillo: #d97706;
+            --amarillo-bg: #fef3c7;
+            --amarillo-txt: #78350f;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --txt: #1e293b;
+            --txt2: #64748b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--fondo); color: var(--txt); min-height: 100vh; }
+
+        .header {
+            background: var(--oscuro); padding: 0 32px;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 64px; box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; color: white; }
+        .header-logo span { color: var(--naranja); }
+        .header-back { color: rgba(255,255,255,0.7); text-decoration: none; font-size: 0.88rem; font-weight: 500; transition: color 0.2s; }
+        .header-back:hover { color: white; }
+
+        .page { max-width: 1150px; margin: 0 auto; padding: 30px 24px; }
+
+        .alerta-banner {
+            display: none; background: var(--amarillo-bg); border: 1.5px solid #fcd34d;
+            border-radius: 10px; padding: 13px 18px; margin-bottom: 24px;
+            color: var(--amarillo-txt); font-size: 0.9rem; font-weight: 500;
+        }
+
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+        .stat {
+            background: var(--card); border-radius: 14px; padding: 22px 24px;
+            border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            position: relative; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+        .stat::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--naranja); border-radius: 14px 0 0 14px; }
+        .stat.verde::before { background: var(--verde); }
+        .stat.rojo::before  { background: var(--rojo); }
+        .stat-num { font-size: 2.4rem; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--txt); line-height: 1; }
+        .stat-lbl { font-size: 0.82rem; color: var(--txt2); margin-top: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 12px; }
+        .topbar h2 { font-size: 1.2rem; font-weight: 700; }
+
+        .filtros { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+        .filtros input, .filtros select {
+            padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 8px;
+            font-family: 'DM Sans', sans-serif; font-size: 0.9rem; background: white;
+            color: var(--txt); outline: none; transition: border-color 0.2s;
+        }
+        .filtros input { flex: 1; min-width: 200px; }
+        .filtros input:focus, .filtros select:focus { border-color: var(--naranja); }
+
+        .btn {
+            padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+            font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 0.9rem;
+            transition: all 0.18s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: var(--naranja); color: white; }
+        .btn-primary:hover { background: var(--naranja-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(230,126,34,0.35); }
+        .btn-success { background: var(--verde); color: white; }
+        .btn-success:hover { background: #15803d; }
+        .btn-danger  { background: var(--rojo); color: white; }
+        .btn-danger:hover  { background: #b91c1c; }
+        .btn-warning { background: var(--amarillo); color: white; }
+        .btn-warning:hover { background: #b45309; }
+        .btn-ghost { background: #f1f5f9; color: var(--txt2); border: 1px solid var(--border); }
+        .btn-ghost:hover { background: #e2e8f0; }
+        .btn-sm { padding: 5px 11px; font-size: 0.82rem; border-radius: 6px; }
+
+        .card { background: var(--card); border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,0.05); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { background: var(--oscuro); color: rgba(255,255,255,0.85); padding: 14px 16px; text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; }
+        tbody td { padding: 13px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; vertical-align: middle; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr { transition: background 0.15s; }
+        tbody tr:hover { background: #fafbff; }
+
+        .badge { padding: 4px 11px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+        .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+        .badge-ok      { background: var(--verde-bg); color: var(--verde-txt); }
+        .badge-ok::before { background: var(--verde); }
+        .badge-bajo    { background: var(--amarillo-bg); color: var(--amarillo-txt); }
+        .badge-bajo::before { background: var(--amarillo); }
+        .badge-critico { background: var(--rojo-bg); color: var(--rojo-txt); }
+        .badge-critico::before { background: var(--rojo); }
+        .cat-tag { padding: 3px 9px; border-radius: 5px; font-size: 0.78rem; font-weight: 500; background: #f1f5f9; color: var(--txt2); }
+        .acciones { display: flex; gap: 6px; }
+
+        .empty { text-align: center; padding: 60px 20px; color: var(--txt2); }
+        .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+        .overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(15,23,42,0.55); z-index: 500;
+            align-items: center; justify-content: center; backdrop-filter: blur(3px);
+        }
+        .overlay.show { display: flex; }
+        .modal {
+            background: white; border-radius: 16px; padding: 32px;
+            width: 470px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            animation: modalIn 0.22s ease;
+        }
+        @keyframes modalIn { from { opacity:0; transform:scale(0.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 22px; color: var(--txt); }
+        .fg { margin-bottom: 16px; }
+        .fg label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--txt2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .fg input, .fg select { width: 100%; padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 0.95rem; color: var(--txt); outline: none; transition: border-color 0.2s; }
+        .fg input:focus, .fg select:focus { border-color: var(--naranja); }
+        .fg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+
+        @media (max-width: 700px) {
+            .stats { grid-template-columns: 1fr; }
+            .topbar { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <div class="header-logo">📦 El <span>Potrillo</span> — Inventario</div>
+    <a href="/menu" class="header-back">← Volver al Menú</a>
+</header>
+
+<div class="page">
+    <div class="alerta-banner" id="alerta">⚠️ <span id="alerta-txt"></span></div>
+
+    <div class="stats">
+        <div class="stat"><div class="stat-num" id="stat-total">0</div><div class="stat-lbl">Total Productos</div></div>
+        <div class="stat verde"><div class="stat-num" id="stat-ok">0</div><div class="stat-lbl">En Stock Normal</div></div>
+        <div class="stat rojo"><div class="stat-num" id="stat-bajo">0</div><div class="stat-lbl">Stock Bajo / Crítico</div></div>
+    </div>
+
+    <div class="topbar">
+        <h2>Gestión de Inventario</h2>
+        <button class="btn btn-primary" onclick="abrirModal()">➕ Agregar Producto</button>
+    </div>
+
+    <div class="filtros">
+        <input type="text" id="buscar" placeholder="🔍 Buscar producto..." oninput="filtrar()">
+        <select id="f-cat" onchange="filtrar()">
+            <option value="">Todas las categorías</option>
+            <option>Alimentos</option><option>Bebidas</option>
+            <option>Insumos</option><option>Limpieza</option><option>Otros</option>
+        </select>
+        <select id="f-est" onchange="filtrar()">
+            <option value="">Todos los estados</option>
+            <option value="ok">Normal</option>
+            <option value="bajo">Stock Bajo</option>
+            <option value="critico">Crítico</option>
+        </select>
+    </div>
+
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th><th>Producto</th><th>Categoría</th>
+                    <th>Cantidad</th><th>Unidad</th><th>Mín.</th>
+                    <th>Estado</th><th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL AGREGAR/EDITAR -->
+<div class="overlay" id="modal-ag">
+    <div class="modal">
+        <h3 id="modal-titulo">➕ Agregar Producto</h3>
+        <input type="hidden" id="m-id">
+        <div class="fg"><label>Nombre del Producto *</label><input type="text" id="m-nombre" placeholder="Ej: Azúcar, Aceite, Servilletas..."></div>
+        <div class="fg"><label>Categoría</label>
+            <select id="m-cat"><option>Alimentos</option><option>Bebidas</option><option>Insumos</option><option>Limpieza</option><option>Otros</option></select>
+        </div>
+        <div class="fg-row">
+            <div class="fg"><label>Cantidad Actual *</label><input type="number" id="m-cant" placeholder="0" min="0"></div>
+            <div class="fg"><label>Unidad</label>
+                <select id="m-uni"><option value="piezas">Piezas</option><option value="kg">Kg</option><option value="litros">Litros</option><option value="bolsas">Bolsas</option><option value="cajas">Cajas</option><option value="latas">Latas</option></select>
+            </div>
+        </div>
+        <div class="fg"><label>Stock Mínimo (alerta si baja de aquí)</label><input type="number" id="m-min" placeholder="5" min="0"></div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="cerrar('modal-ag')">Cancelar</button>
+            <button class="btn btn-success" onclick="guardar()">💾 Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL AJUSTE -->
+<div class="overlay" id="modal-aj">
+    <div class="modal">
+        <h3 id="aj-titulo">🔧 Ajustar Stock</h3>
+        <input type="hidden" id="aj-id">
+        <div class="fg"><label>Operación</label>
+            <select id="aj-tipo">
+                <option value="sumar">➕ Entrada (agregar al stock)</option>
+                <option value="restar">➖ Salida (consumo / uso)</option>
+                <option value="fijar">📌 Fijar cantidad exacta</option>
+            </select>
+        </div>
+        <div class="fg"><label>Cantidad</label><input type="number" id="aj-cant" placeholder="0" min="0"></div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="cerrar('modal-aj')">Cancelar</button>
+            <button class="btn btn-warning" onclick="aplicarAjuste()">✅ Aplicar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Control de acceso (solo aplica cuando corre en Flask) ─────────────────────
+(function() {
+    const enServidor = window.location.hostname !== '' && !window.location.href.includes('blob:');
+    if (!enServidor) return;
+    const token = localStorage.getItem('authToken');
+    const rol   = localStorage.getItem('userRol');
+    if (!token || !rol) { window.location.href = '/'; return; }
+    if (!['admin','cajero'].includes(rol)) {
+        const dest = {cocinero:'/cocina',hoster:'/mesas',mesero:'/menu'};
+        window.location.href = dest[rol] || '/';
+    }
+})();
+
+// ── Estado ────────────────────────────────────────────────────────────────────
+let inv = [];
+let nid = 1;
+
+const EJEMPLO = [
+    { id:1, nombre:'Azúcar',        categoria:'Alimentos', cantidad:12, unidad:'kg',     stockMinimo:5  },
+    { id:2, nombre:'Aceite',        categoria:'Alimentos', cantidad:3,  unidad:'litros', stockMinimo:5  },
+    { id:3, nombre:'Servilletas',   categoria:'Insumos',   cantidad:8,  unidad:'bolsas', stockMinimo:3  },
+    { id:4, nombre:'Refresco Cola', categoria:'Bebidas',   cantidad:0,  unidad:'cajas',  stockMinimo:4  },
+    { id:5, nombre:'Detergente',    categoria:'Limpieza',  cantidad:2,  unidad:'litros', stockMinimo:2  },
+    { id:6, nombre:'Harina',        categoria:'Alimentos', cantidad:20, unidad:'kg',     stockMinimo:10 },
+];
+
+function cargar() {
+    try {
+        const g = localStorage.getItem('inv_potrillo');
+        if (g) { const p = JSON.parse(g); inv = p.items||[]; nid = p.nid||(inv.length+1); }
+        else   { inv = EJEMPLO.map(x=>({...x})); nid = 7; }
+    } catch(e) { inv = EJEMPLO.map(x=>({...x})); nid = 7; }
+    render(inv); actStats(); alertas();
+}
+
+function save() {
+    try { localStorage.setItem('inv_potrillo', JSON.stringify({items:inv, nid})); } catch(e){}
+}
+
+function est(it) {
+    if (it.cantidad <= 0) return 'critico';
+    if (it.cantidad <= it.stockMinimo) return 'bajo';
+    return 'ok';
+}
+function badge(e) {
+    const m = {ok:['badge-ok','Normal'],bajo:['badge-bajo','Bajo'],critico:['badge-critico','Crítico']};
+    const [c,t] = m[e]||m.ok;
+    return `<span class="badge ${c}">${t}</span>`;
+}
+
+function render(items) {
+    const tb = document.getElementById('tbody');
+    if (!items.length) {
+        tb.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📦</div><p>No hay productos. Agrega el primero con ➕</p></div></td></tr>`;
+        return;
+    }
+    tb.innerHTML = items.map((it,i) => {
+        const e = est(it);
+        const colorCant = e==='critico' ? 'var(--rojo)' : e==='bajo' ? 'var(--amarillo)' : 'var(--verde)';
+        return `<tr>
+            <td style="color:#94a3b8;font-size:.82rem;font-family:'DM Mono',monospace">${String(i+1).padStart(2,'0')}</td>
+            <td><strong>${it.nombre}</strong></td>
+            <td><span class="cat-tag">${it.categoria}</span></td>
+            <td style="font-family:'DM Mono',monospace;font-size:1.05rem;font-weight:600;color:${colorCant}">${it.cantidad}</td>
+            <td style="color:var(--txt2)">${it.unidad}</td>
+            <td style="color:var(--txt2)">${it.stockMinimo}</td>
+            <td>${badge(e)}</td>
+            <td><div class="acciones">
+                <button class="btn btn-warning btn-sm" onclick="abrirAjuste(${it.id})">🔧 Ajustar</button>
+                <button class="btn btn-ghost btn-sm" onclick="abrirEditar(${it.id})">✏️</button>
+                <button class="btn btn-danger btn-sm" onclick="eliminar(${it.id})">🗑️</button>
+            </div></td>
+        </tr>`;
+    }).join('');
+}
+
+function actStats() {
+    document.getElementById('stat-total').textContent = inv.length;
+    document.getElementById('stat-ok').textContent    = inv.filter(i=>est(i)==='ok').length;
+    document.getElementById('stat-bajo').textContent  = inv.filter(i=>est(i)!=='ok').length;
+}
+
+function alertas() {
+    const malos = inv.filter(i=>est(i)!=='ok');
+    const div   = document.getElementById('alerta');
+    if (malos.length) {
+        document.getElementById('alerta-txt').textContent =
+            `${malos.length} producto(s) con stock bajo o crítico: ${malos.map(i=>`${i.nombre} (${i.cantidad} ${i.unidad})`).join(', ')}`;
+        div.style.display = 'block';
+    } else { div.style.display = 'none'; }
+}
+
+function filtrar() {
+    const q   = document.getElementById('buscar').value.toLowerCase();
+    const cat = document.getElementById('f-cat').value;
+    const es  = document.getElementById('f-est').value;
+    render(inv.filter(it =>
+        it.nombre.toLowerCase().includes(q) &&
+        (!cat || it.categoria===cat) &&
+        (!es  || est(it)===es)
+    ));
+}
+
+function abrir(id) { document.getElementById(id).classList.add('show'); }
+function cerrar(id){ document.getElementById(id).classList.remove('show'); }
+
+function abrirModal(editId=null) {
+    document.getElementById('m-id').value = editId||'';
+    document.getElementById('modal-titulo').textContent = editId ? '✏️ Editar Producto' : '➕ Agregar Producto';
+    if (editId) {
+        const it = inv.find(i=>i.id===editId);
+        document.getElementById('m-nombre').value = it.nombre;
+        document.getElementById('m-cat').value    = it.categoria;
+        document.getElementById('m-cant').value   = it.cantidad;
+        document.getElementById('m-uni').value    = it.unidad;
+        document.getElementById('m-min').value    = it.stockMinimo;
+    } else {
+        document.getElementById('m-nombre').value='';
+        document.getElementById('m-cant').value='';
+        document.getElementById('m-cat').value='Alimentos';
+        document.getElementById('m-uni').value='piezas';
+        document.getElementById('m-min').value='5';
+    }
+    abrir('modal-ag');
+    setTimeout(()=>document.getElementById('m-nombre').focus(),120);
+}
+function abrirEditar(id){ abrirModal(id); }
+
+function guardar() {
+    const nombre = document.getElementById('m-nombre').value.trim();
+    const cat    = document.getElementById('m-cat').value;
+    const cant   = parseFloat(document.getElementById('m-cant').value);
+    const uni    = document.getElementById('m-uni').value;
+    const min    = parseInt(document.getElementById('m-min').value)||5;
+    const editId = document.getElementById('m-id').value;
+    if (!nombre) { alert('El nombre es obligatorio.'); return; }
+    if (isNaN(cant)||cant<0) { alert('Ingresa una cantidad válida.'); return; }
+    if (editId) {
+        const idx = inv.findIndex(i=>i.id===parseInt(editId));
+        if (idx>=0) inv[idx]={...inv[idx],nombre,categoria:cat,cantidad:cant,unidad:uni,stockMinimo:min};
+    } else {
+        inv.push({id:nid++,nombre,categoria:cat,cantidad:cant,unidad:uni,stockMinimo:min});
+    }
+    save(); cerrar('modal-ag'); render(inv); actStats(); alertas();
+}
+
+function eliminar(id) {
+    const it = inv.find(i=>i.id===id);
+    if (!confirm(`¿Eliminar "${it.nombre}"?`)) return;
+    inv = inv.filter(i=>i.id!==id);
+    save(); render(inv); actStats(); alertas();
+}
+
+function abrirAjuste(id) {
+    const it = inv.find(i=>i.id===id);
+    document.getElementById('aj-id').value = id;
+    document.getElementById('aj-titulo').textContent = `🔧 ${it.nombre}  ·  Actual: ${it.cantidad} ${it.unidad}`;
+    document.getElementById('aj-cant').value='';
+    document.getElementById('aj-tipo').value='sumar';
+    abrir('modal-aj');
+    setTimeout(()=>document.getElementById('aj-cant').focus(),120);
+}
+
+function aplicarAjuste() {
+    const id   = parseInt(document.getElementById('aj-id').value);
+    const tipo = document.getElementById('aj-tipo').value;
+    const cant = parseFloat(document.getElementById('aj-cant').value);
+    if (isNaN(cant)||cant<0){ alert('Cantidad inválida.'); return; }
+    const idx = inv.findIndex(i=>i.id===id);
+    if (tipo==='sumar') inv[idx].cantidad += cant;
+    else if (tipo==='restar') inv[idx].cantidad = Math.max(0, inv[idx].cantidad - cant);
+    else inv[idx].cantidad = cant;
+    save(); cerrar('modal-aj'); render(inv); actStats(); alertas();
+}
+
+['modal-ag','modal-aj'].forEach(id=>{
+    document.getElementById(id).addEventListener('click',function(e){ if(e.target===this) cerrar(id); });
+});
+
+document.addEventListener('DOMContentLoaded', cargar);
+</script>
+</body>
+</html>

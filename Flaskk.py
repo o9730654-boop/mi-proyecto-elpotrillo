@@ -56,6 +56,10 @@ def view_cocina():
 def reporte_ventas_page():
     return render_template('reportedeventas.html')
 
+@app.route('/inventario')
+def inventario_page():
+    return render_template('inventario.html')
+
 # ─── API: LOGIN ───────────────────────────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
 def login():

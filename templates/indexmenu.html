@@ -17,9 +17,10 @@
             <a href="#Bebida">Bebidas</a>
             <a href="#Licuados">Licuados</a>
             <a href="/reporte-ventas" class="nav-link"> Consulta de ventas</a>
+            <a onclick="window.location.href = '/reporte';" class="report-link" style="cursor:pointer;"> Corte de Caja</a>
             <a href="/mesas" class="nav-link"> Mesas</a>
             <a href="/cocina" class="nav-link"> Pantalla de Cocina</a>
-            <a onclick="window.location.href = '/reporte';" class="report-link" style="cursor:pointer;"> Reporte de Ventas</a>
+            <a href="/inventario" class="nav-link"> Inventario</a>
             <a href="#" onclick="logout()"> Cerrar Sesión</a>
         </nav>
     </div>
@@ -76,7 +77,7 @@
         // Links visibles por rol (los que NO están en esta lista se ocultan)
         const navPermitido = {
             'mesero':   ['#Comida', '#Bebida', '#Licuados'],
-            'cajero':   ['/reporte-ventas', '/reporte'],
+            'cajero':   ['/reporte-ventas', '/reporte', '/inventario'],
             'cocinero': ['/cocina'],
             'hoster':   ['/mesas'],
             'admin':    null  // null = ve todo
