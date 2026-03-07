@@ -17,7 +17,7 @@
             <a href="#Bebida">Bebidas</a>
             <a href="#Licuados">Licuados</a>
             <a href="/reporte-ventas" class="nav-link"> Consulta de ventas</a>
-            <a href="/reporte" class="report-link"> Corte de Caja</a>
+            <a href="/reporte" class="nav-link"> Corte de Caja</a>
             <a href="/mesas" class="nav-link"> Mesas</a>
             <a href="/cocina" class="nav-link"> Pantalla de Cocina</a>
             <a href="/inventario" class="nav-link"> Inventario</a>
@@ -35,11 +35,10 @@
     <div class="cart-total">
         <strong>Total:</strong> $<span id="cart-total">0.00</span>
     </div>
-    
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
-   <button type="button" class="btn" style="grid-column: span 2;" onclick="window.enviarACaja()">📝 Enviar a Caja (Cobrar luego)</button>
-</div>
-</aside>
+        <button type="button" class="btn" style="grid-column: span 2;" onclick="window.enviarACaja()">📝 Enviar a Caja (Cobrar luego)</button>
+    </div>
+    </aside>
 </main>
 
 <footer>
@@ -55,14 +54,12 @@
         const token = localStorage.getItem('authToken');
         const rol   = localStorage.getItem('userRol');
         if (!token || !rol) { window.location.href = '/'; return; }
+        // cajero también puede entrar al menú para ver sus links
         const rolesPermitidos = ["mesero", "admin", "cajero"];
         if (!rolesPermitidos.includes(rol)) {
             const destinos = {
                 'cocinero': '/cocina',
-                'hoster':   '/mesas',
-                'mesero':   '/menu',
-                'cajero':   '/menu',
-                'admin':    '/menu'
+                'hoster':   '/mesas'
             };
             alert('No tienes permiso para acceder a esta sección.');
             window.location.href = destinos[rol] || '/';
@@ -71,32 +68,17 @@
     // ─────────────────────────────────────────────────────────────────────────────
 
 
-    // ─── OCULTAR CARRITO/MENÚ PARA CAJERO ────────────────────────────────────────
-    (function() {
-        const rol = localStorage.getItem('userRol');
-        if (rol === 'cajero') {
-            // Ocultar el layout de menú y carrito, mostrar mensaje directo
-            const layout = document.querySelector('.layout');
-            if (layout) {
-                layout.innerHTML = `
-                    <div style="grid-column:1/-1; text-align:center; padding:60px 20px; color:#64748b;">
-                        <div style="font-size:3rem; margin-bottom:16px;">💼</div>
-                        <h2 style="color:#1e293b; margin-bottom:8px;">Panel de Caja</h2>
-                        <p>Usa el menú de navegación para acceder a Consulta de Ventas, Corte de Caja o Inventario.</p>
-                    </div>`;
-            }
-        }
-    })();
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ─── FILTRO DE NAVBAR SEGÚN ROL ──────────────────────────────────────────────
     (function filtrarNavbar() {
         const rol = localStorage.getItem('userRol');
-        // Links visibles por rol (los que NO están en esta lista se ocultan)
+
+        // Qué links puede ver cada rol (null = ve todo)
         const navPermitido = {
             'mesero':   ['#Comida', '#Bebida', '#Licuados'],
             'cajero':   ['/reporte-ventas', '/reporte', '/inventario'],
             'cocinero': ['/cocina'],
             'hoster':   ['/mesas'],
-            'admin':    null  // null = ve todo
+            'admin':    null
         };
 
         const permitidos = navPermitido[rol];
@@ -105,71 +87,71 @@
         document.querySelectorAll('.main-nav a').forEach(link => {
             const href    = link.getAttribute('href') || '';
             const onclick = link.getAttribute('onclick') || '';
-            // Siempre mostrar el botón de cerrar sesión
+            // Siempre mostrar cerrar sesión
             if (onclick.includes('logout')) return;
-            // Ocultar si ni el href ni el onclick contienen alguna ruta permitida
-            const visible = permitidos.some(p => href.includes(p) || onclick.includes(p));
+            // Mostrar solo si el href está en la lista permitida
+            const visible = permitidos.some(p => href.includes(p));
             if (!visible) link.style.display = 'none';
         });
+
+        // Si es cajero, ocultar el carrito y mostrar mensaje de bienvenida
+        if (rol === 'cajero') {
+            const layout = document.querySelector('.layout');
+            if (layout) {
+                layout.innerHTML = `
+                    <div style="grid-column:1/-1;text-align:center;padding:80px 20px;color:#64748b;">
+                        <div style="font-size:3.5rem;margin-bottom:16px;">💼</div>
+                        <h2 style="color:#1e293b;margin-bottom:10px;">Panel de Caja</h2>
+                        <p style="font-size:1rem;">Usa el menú de navegación para acceder a:<br><br>
+                            <strong>Consulta de Ventas</strong> · <strong>Corte de Caja</strong> · <strong>Inventario</strong>
+                        </p>
+                    </div>`;
+            }
+        }
     })();
     // ─────────────────────────────────────────────────────────────────────────────
 
-function logout() {
-        localStorage.removeItem('authToken'); 
+    function logout() {
+        localStorage.removeItem('authToken');
         alert('Sesión cerrada.');
-        window.location.href = '/'; 
+        window.location.href = '/';
     }
 
     async function loadMenu() {
         try {
             const response = await fetch('/api/menu');
             const rawText = await response.text();
-            console.log('API /api/menu respuesta raw:', rawText);
-            
-            if (!response.ok) {
-                throw new Error('Error HTTP ' + response.status + ': ' + rawText);
-            }
-            
+            if (!response.ok) throw new Error('Error HTTP ' + response.status + ': ' + rawText);
             const data = JSON.parse(rawText);
-            console.log('Items recibidos:', data.length, data);
-            
             if (data.length === 0) {
-                document.getElementById('menu').innerHTML = 
-                    '<p style="color:red;padding:20px">⚠️ La API devolvió 0 productos. Revisa la consola del navegador (F12).</p>';
+                document.getElementById('menu').innerHTML =
+                    '<p style="color:red;padding:20px">⚠️ La API devolvió 0 productos.</p>';
                 return [];
             }
-            
             return data.map(item => {
-                // Las columnas en PostgreSQL están en minúsculas
                 const name  = item.mnu_nombre_plato || item.Mnu_nombre_plato || '';
                 const desc  = item.mnu_descripcion  || item.Mnu_descripcion  || '';
                 const price = parseFloat(item.mnu_precio || item.Mnu_precio  || 0);
-                console.log('Item:', name, price);
-                return {
-                    name:     name,
-                    desc:     desc,
-                    price:    price,
-                    category: classifyCategory(name)
-                };
+                return { name, desc, price, category: classifyCategory(name) };
             });
         } catch (error) {
             console.error('Error cargando menú:', error);
-            document.getElementById('menu').innerHTML = 
+            document.getElementById('menu').innerHTML =
                 '<p style="color:red;padding:20px">❌ Error: ' + error.message + '</p>';
-            return []; 
+            return [];
         }
     }
 
     function classifyCategory(name) {
         if (name.includes('Huevo') || name.includes('Tortas') || name.includes('Chilaquiles') || name.includes('Sándwiches')) return 'Comida';
-        if (name.includes('Café') || name.includes('Chocomilk')) return 'Bebida caliente'; 
+        if (name.includes('Café') || name.includes('Chocomilk')) return 'Bebida caliente';
         if (name.includes('Licuado')) return 'Licuados';
         if (name.includes('Refresco') || name.includes('Jamaica') || name.includes('Limonada')) return 'Bebida';
-        return 'Comida'; 
+        return 'Comida';
     }
 
     async function iniciarMenu() {
-        const items = await loadMenu(); 
+        const items = await loadMenu();
         const grouped = items.reduce((acc, item) => {
             if (!acc[item.category]) acc[item.category] = [];
             acc[item.category].push(item);
@@ -177,15 +159,15 @@ function logout() {
         }, {});
 
         const menuEl = document.getElementById('menu');
-        const order = ['Comida', 'Bebida caliente', 'Licuados', 'Bebida']; 
-        menuEl.innerHTML = ''; 
+        const order = ['Comida', 'Bebida caliente', 'Licuados', 'Bebida'];
+        menuEl.innerHTML = '';
 
         order.forEach(cat => {
             const list = grouped[cat];
             if (!list) return;
             const section = document.createElement('section');
             section.className = 'category-section';
-            section.id = cat.replace(' ', ''); 
+            section.id = cat.replace(' ', '');
             const h = document.createElement('h3');
             h.className = 'category-title';
             h.textContent = cat;
@@ -202,7 +184,7 @@ function logout() {
                 title.textContent = item.name;
                 const price = document.createElement('div');
                 price.className = 'card-price';
-                price.textContent = '$' + item.price.toFixed(2); 
+                price.textContent = '$' + item.price.toFixed(2);
                 titleRow.appendChild(title);
                 titleRow.appendChild(price);
                 const desc = document.createElement('p');
@@ -226,7 +208,6 @@ function logout() {
         document.getElementById('year').textContent = new Date().getFullYear();
     }
 
-    // Llamamos directamente — funciona tanto si el DOM ya cargó como si no
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', iniciarMenu);
     } else {
@@ -244,7 +225,7 @@ function logout() {
         renderCart();
     }
     function renderCart() {
-        const cartList = document.getElementById('cart-items');
+        const cartList  = document.getElementById('cart-items');
         const cartTotal = document.getElementById('cart-total');
         cartList.innerHTML = '';
         let total = 0;
@@ -258,90 +239,55 @@ function logout() {
         cartTotal.textContent = total.toFixed(2);
     }
 
-    // --- SEGUNDO AJUSTE INTEGRADO (FUNCIÓN GLOBAL) ---
-    // ... aquí termina tu función renderCart() y lo demás ...
-
-    // --- AQUÍ PEGAS EL 2DO AJUSTE ---
-   // --- NUEVA FUNCIÓN PARA ENVIAR A CAJA Y COCINA ---
     window.enviarACaja = async function() {
-        if (cart.length === 0) { 
-            alert("Tu carrito está vacío."); 
-            return; 
-        }
-
+        if (cart.length === 0) { alert("Tu carrito está vacío."); return; }
         const cliente = prompt("Nombre del cliente:", "Venta de Mostrador");
         if (cliente === null || cliente.trim() === "") return;
-
         const token = localStorage.getItem('authToken');
-        if (!token) {
-            alert("Error de sesión. Inicia sesión de nuevo.");
-            window.location.href = '/';
-            return;
-        }
-
+        if (!token) { alert("Error de sesión."); window.location.href = '/'; return; }
         try {
             const response = await fetch('/api/checkout', {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'Authorization': `Bearer ${token}` 
-                },
-                body: JSON.stringify({ 
-                    cliente: cliente, 
-                    telefono: "", 
-                    metodo_pago: 'Pendiente',
-                    items: cart 
-                })
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ cliente, telefono: "", metodo_pago: 'Pendiente', items: cart })
             });
-
             if (response.ok) {
                 alert(`✅ Orden de ${cliente} enviada a Cocina y Caja`);
-                cart = []; 
-                renderCart();
+                cart = []; renderCart();
             } else {
                 const err = await response.json();
                 alert('❌ Error: ' + (err.message || 'No se pudo guardar.'));
             }
         } catch (error) {
-            console.error('Error:', error);
             alert('Error de conexión con el servidor.');
         }
     };
-    // --- FIN DEL AJUSTE ---
-let ticketsAvisados = new Set(); // Para no repetir la misma alerta muchas veces
 
-async function revisarPedidosListos() {
-    const token = localStorage.getItem('authToken');
-    try {
-        const response = await fetch('/api/notificaciones/listos', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const listos = await response.json();
+    let ticketsAvisados = new Set();
+    async function revisarPedidosListos() {
+        const token = localStorage.getItem('authToken');
+        try {
+            const response = await fetch('/api/notificaciones/listos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const listos = await response.json();
+            listos.forEach(pedido => {
+                if (!ticketsAvisados.has(pedido.ticket_id)) {
+                    mostrarNotificacionCocina(pedido.cliente);
+                    ticketsAvisados.add(pedido.ticket_id);
+                }
+            });
+        } catch (e) { console.error("Error en notificaciones", e); }
+    }
 
-        listos.forEach(pedido => {
-            // Si el ticket es nuevo y no hemos avisado en esta sesión
-            if (!ticketsAvisados.has(pedido.ticket_id)) {
-                mostrarNotificacionCocina(pedido.cliente);
-                ticketsAvisados.add(pedido.ticket_id);
-            }
-        });
-    } catch (e) { console.error("Error en notificaciones", e); }
-}
+    function mostrarNotificacionCocina(nombre) {
+        const alerta = document.getElementById('alerta-cocina');
+        document.getElementById('nombre-cliente-listo').innerText = nombre;
+        alerta.style.display = 'block';
+        setTimeout(() => { alerta.style.display = 'none'; }, 5000);
+    }
 
-function mostrarNotificacionCocina(nombre) {
-    const alerta = document.getElementById('alerta-cocina');
-    document.getElementById('nombre-cliente-listo').innerText = nombre;
-    
-    alerta.style.display = 'block';
-    
-    // Desaparece después de 5 segundos (5000ms)
-    setTimeout(() => {
-        alerta.style.display = 'none';
-    }, 5000);
-}
-
-// Revisar cada 10 segundos si la cocina terminó algo
-setInterval(revisarPedidosListos, 5000);
+    setInterval(revisarPedidosListos, 5000);
 
 </script>
 </body>
