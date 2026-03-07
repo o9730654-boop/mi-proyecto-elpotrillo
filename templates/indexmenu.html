@@ -17,7 +17,7 @@
             <a href="#Bebida">Bebidas</a>
             <a href="#Licuados">Licuados</a>
             <a href="/reporte-ventas" class="nav-link"> Consulta de ventas</a>
-            <a onclick="window.location.href = '/reporte';" class="report-link" style="cursor:pointer;"> Corte de Caja</a>
+            <a href="/reporte" class="report-link"> Corte de Caja</a>
             <a href="/mesas" class="nav-link"> Mesas</a>
             <a href="/cocina" class="nav-link"> Pantalla de Cocina</a>
             <a href="/inventario" class="nav-link"> Inventario</a>
@@ -55,13 +55,13 @@
         const token = localStorage.getItem('authToken');
         const rol   = localStorage.getItem('userRol');
         if (!token || !rol) { window.location.href = '/'; return; }
-        const rolesPermitidos = ["mesero", "admin"];
+        const rolesPermitidos = ["mesero", "admin", "cajero"];
         if (!rolesPermitidos.includes(rol)) {
             const destinos = {
                 'cocinero': '/cocina',
                 'hoster':   '/mesas',
                 'mesero':   '/menu',
-                'cajero':   '/reporte-ventas',
+                'cajero':   '/menu',
                 'admin':    '/menu'
             };
             alert('No tienes permiso para acceder a esta sección.');
@@ -71,7 +71,23 @@
     // ─────────────────────────────────────────────────────────────────────────────
 
 
-    // ─── FILTRO DE NAVBAR SEGÚN ROL ──────────────────────────────────────────────
+    // ─── OCULTAR CARRITO/MENÚ PARA CAJERO ────────────────────────────────────────
+    (function() {
+        const rol = localStorage.getItem('userRol');
+        if (rol === 'cajero') {
+            // Ocultar el layout de menú y carrito, mostrar mensaje directo
+            const layout = document.querySelector('.layout');
+            if (layout) {
+                layout.innerHTML = `
+                    <div style="grid-column:1/-1; text-align:center; padding:60px 20px; color:#64748b;">
+                        <div style="font-size:3rem; margin-bottom:16px;">💼</div>
+                        <h2 style="color:#1e293b; margin-bottom:8px;">Panel de Caja</h2>
+                        <p>Usa el menú de navegación para acceder a Consulta de Ventas, Corte de Caja o Inventario.</p>
+                    </div>`;
+            }
+        }
+    })();
+    // ─────────────────────────────────────────────────────────────────────────────
     (function filtrarNavbar() {
         const rol = localStorage.getItem('userRol');
         // Links visibles por rol (los que NO están en esta lista se ocultan)
@@ -87,12 +103,12 @@
         if (!permitidos) return; // admin ve todo
 
         document.querySelectorAll('.main-nav a').forEach(link => {
-            const href = link.getAttribute('href') || '';
+            const href    = link.getAttribute('href') || '';
             const onclick = link.getAttribute('onclick') || '';
             // Siempre mostrar el botón de cerrar sesión
             if (onclick.includes('logout')) return;
-            // Ocultar si el href no está en la lista de permitidos
-            const visible = permitidos.some(p => href.includes(p));
+            // Ocultar si ni el href ni el onclick contienen alguna ruta permitida
+            const visible = permitidos.some(p => href.includes(p) || onclick.includes(p));
             if (!visible) link.style.display = 'none';
         });
     })();
