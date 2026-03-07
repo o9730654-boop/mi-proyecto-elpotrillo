@@ -86,4 +86,92 @@
         });
     </script>
 </body>
+</html><!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            width: 300px;
+        }
+        h1 { text-align: center; color: #333; }
+        input {
+            width: 100%; padding: 10px; margin: 10px 0;
+            border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box;
+        }
+        button {
+            width: 100%; padding: 10px; background: #667eea;
+            color: white; border: none; border-radius: 5px;
+            cursor: pointer; font-size: 16px;
+        }
+        button:hover { background: #764ba2; }
+        .error { color: red; text-align: center; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>Login</h1>
+        <input type="text" id="username" placeholder="Usuario">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="login()">Ingresar</button>
+        <p id="error" class="error"></p>
+    </div>
+
+    <script>
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('userRol', data.rol);
+
+                    // cajero → /menu para que vea sus links (ventas, corte, inventario)
+                    const destinos = {
+                        'cocinero': '/cocina',
+                        'hoster':   '/mesas',
+                        'mesero':   '/menu',
+                        'cajero':   '/menu',
+                        'admin':    '/menu'
+                    };
+
+                    window.location.href = destinos[data.rol] || '/menu';
+
+                } else {
+                    document.getElementById('error').textContent = data.message;
+                }
+            } catch (error) {
+                document.getElementById('error').textContent = 'Error de conexión con el servidor.';
+            }
+        }
+
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') login();
+        });
+    </script>
+</body>
 </html>

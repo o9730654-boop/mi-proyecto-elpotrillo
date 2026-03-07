@@ -56,10 +56,6 @@ def view_cocina():
 def reporte_ventas_page():
     return render_template('reportedeventas.html')
 
-@app.route('/inventario')
-def inventario_page():
-    return render_template('inventario.html')
-
 # ─── API: LOGIN ───────────────────────────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -342,6 +338,10 @@ def debug_tablas():
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
+
+@app.route('/inventario')
+def inventario_page():
+    return render_template('inventario.html')
 
 @app.route('/loaderio-02da15920fabcf6b26e0709c27fafdd9.txt')
 def verify_loader_io():
