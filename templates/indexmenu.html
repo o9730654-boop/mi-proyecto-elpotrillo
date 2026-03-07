@@ -264,6 +264,9 @@
     };
 
     let ticketsAvisados = new Set();
+    let colaNotificaciones = [];
+    let mostrando = false;
+
     async function revisarPedidosListos() {
         const token = localStorage.getItem('authToken');
         try {
@@ -273,18 +276,33 @@
             const listos = await response.json();
             listos.forEach(pedido => {
                 if (!ticketsAvisados.has(pedido.ticket_id)) {
-                    mostrarNotificacionCocina(pedido.cliente);
                     ticketsAvisados.add(pedido.ticket_id);
+                    // Agregar a la cola con el nombre correcto de ESE pedido
+                    colaNotificaciones.push({
+                        ticket: pedido.ticket_id,
+                        cliente: pedido.cliente
+                    });
                 }
             });
+            // Si no hay nada mostrándose, mostrar el siguiente de la cola
+            if (!mostrando && colaNotificaciones.length > 0) {
+                mostrarSiguiente();
+            }
         } catch (e) { console.error("Error en notificaciones", e); }
     }
 
-    function mostrarNotificacionCocina(nombre) {
+    function mostrarSiguiente() {
+        if (colaNotificaciones.length === 0) { mostrando = false; return; }
+        mostrando = true;
+        const pedido = colaNotificaciones.shift(); // sacar el primero de la cola
         const alerta = document.getElementById('alerta-cocina');
-        document.getElementById('nombre-cliente-listo').innerText = nombre;
+        document.getElementById('nombre-cliente-listo').innerText = pedido.cliente;
         alerta.style.display = 'block';
-        setTimeout(() => { alerta.style.display = 'none'; }, 5000);
+        // Después de 4 segundos ocultar y mostrar el siguiente si hay más
+        setTimeout(() => {
+            alerta.style.display = 'none';
+            setTimeout(mostrarSiguiente, 500); // pequeña pausa entre notificaciones
+        }, 4000);
     }
 
     setInterval(revisarPedidosListos, 5000);
