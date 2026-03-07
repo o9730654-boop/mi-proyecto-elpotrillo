@@ -7,7 +7,80 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='12341.css') }}" />
 </head>
 <body>
-<div id="alerta-cocina">🔔 ¡Pedido de <span id="nombre-cliente-listo"></span> listo!</div>
+<!-- Sistema de notificaciones toast -->
+<div id="toast-container"></div>
+
+<!-- Badge de notificaciones en navbar (se inyecta junto al link Cerrar Sesión) -->
+<style>
+    #toast-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+    }
+    .toast-notif {
+        background: #16a34a;
+        color: white;
+        padding: 14px 20px;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 0.95rem;
+        font-weight: 600;
+        min-width: 260px;
+        max-width: 320px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        pointer-events: all;
+        animation: slideIn 0.35s ease;
+        transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+    .toast-notif.saliendo {
+        opacity: 0;
+        transform: translateX(40px);
+    }
+    .toast-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .toast-texto { flex: 1; }
+    .toast-titulo { font-size: 0.8rem; opacity: 0.85; font-weight: 500; margin-bottom: 2px; }
+    .toast-nombre { font-size: 1rem; font-weight: 700; }
+    .toast-cerrar {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        border-radius: 50%;
+        width: 22px; height: 22px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .toast-cerrar:hover { background: rgba(255,255,255,0.35); }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateX(40px); }
+        to   { opacity: 1; transform: translateX(0); }
+    }
+    /* Badge de notificaciones */
+    .notif-badge-wrap { position: relative; display: inline-flex; align-items: center; }
+    #notif-badge {
+        display: none;
+        position: absolute;
+        top: -8px; right: -10px;
+        background: #dc2626;
+        color: white;
+        border-radius: 50%;
+        width: 18px; height: 18px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+</style>
 
 <header class="site-header">
     <div class="container header-inner">
@@ -21,7 +94,12 @@
             <a href="/mesas" class="nav-link"> Mesas</a>
             <a href="/cocina" class="nav-link"> Pantalla de Cocina</a>
             <a href="/inventario" class="nav-link"> Inventario</a>
-            <a href="#" onclick="logout()"> Cerrar Sesión</a>
+            <span class="notif-badge-wrap">
+                <a href="#" onclick="logout()"> Cerrar Sesión</a>
+            </span>
+            <span class="notif-badge-wrap" id="notif-wrap" style="margin-left:8px;cursor:pointer" onclick="limpiarBadge()" title="Notificaciones">
+                🔔 <span id="notif-badge"></span>
+            </span>
         </nav>
     </div>
 </header>
@@ -263,47 +341,72 @@
         }
     };
 
+    // ─── SISTEMA DE NOTIFICACIONES TOAST ────────────────────────────────────────
     let ticketsAvisados = new Set();
-    let colaNotificaciones = [];
-    let mostrando = false;
+    let contadorNoLeidas = 0;
 
     async function revisarPedidosListos() {
         const token = localStorage.getItem('authToken');
+        if (!token) return;
         try {
             const response = await fetch('/api/notificaciones/listos', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!response.ok) return;
             const listos = await response.json();
             listos.forEach(pedido => {
                 if (!ticketsAvisados.has(pedido.ticket_id)) {
                     ticketsAvisados.add(pedido.ticket_id);
-                    // Agregar a la cola con el nombre correcto de ESE pedido
-                    colaNotificaciones.push({
-                        ticket: pedido.ticket_id,
-                        cliente: pedido.cliente
-                    });
+                    mostrarToast(pedido.cliente, pedido.ticket_id);
                 }
             });
-            // Si no hay nada mostrándose, mostrar el siguiente de la cola
-            if (!mostrando && colaNotificaciones.length > 0) {
-                mostrarSiguiente();
-            }
         } catch (e) { console.error("Error en notificaciones", e); }
     }
 
-    function mostrarSiguiente() {
-        if (colaNotificaciones.length === 0) { mostrando = false; return; }
-        mostrando = true;
-        const pedido = colaNotificaciones.shift(); // sacar el primero de la cola
-        const alerta = document.getElementById('alerta-cocina');
-        document.getElementById('nombre-cliente-listo').innerText = pedido.cliente;
-        alerta.style.display = 'block';
-        // Después de 4 segundos ocultar y mostrar el siguiente si hay más
-        setTimeout(() => {
-            alerta.style.display = 'none';
-            setTimeout(mostrarSiguiente, 500); // pequeña pausa entre notificaciones
-        }, 4000);
+    function mostrarToast(nombre, ticketId) {
+        // Incrementar badge
+        contadorNoLeidas++;
+        actualizarBadge();
+
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = 'toast-notif';
+        toast.innerHTML = `
+            <div class="toast-icon">✅</div>
+            <div class="toast-texto">
+                <div class="toast-titulo">¡Pedido listo! · #${ticketId}</div>
+                <div class="toast-nombre">${nombre}</div>
+            </div>
+            <button class="toast-cerrar" onclick="cerrarToast(this.parentElement)">✕</button>
+        `;
+        container.appendChild(toast);
+
+        // Desaparecer automáticamente en 5 segundos
+        setTimeout(() => cerrarToast(toast), 5000);
     }
+
+    function cerrarToast(toast) {
+        if (!toast || !toast.parentElement) return;
+        toast.classList.add('saliendo');
+        setTimeout(() => { if (toast.parentElement) toast.parentElement.removeChild(toast); }, 400);
+    }
+
+    function actualizarBadge() {
+        const badge = document.getElementById('notif-badge');
+        if (!badge) return;
+        if (contadorNoLeidas > 0) {
+            badge.style.display = 'flex';
+            badge.textContent = contadorNoLeidas > 9 ? '9+' : contadorNoLeidas;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function limpiarBadge() {
+        contadorNoLeidas = 0;
+        actualizarBadge();
+    }
+    // ─────────────────────────────────────────────────────────────────────────────
 
     setInterval(revisarPedidosListos, 5000);
 
