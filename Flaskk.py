@@ -31,30 +31,23 @@ def login_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
-# Crea las tablas de inventario y recetas si no existen
+# ─── INIT: solo crea tabla recetas si no existe ───────────────────────────────
 def init_db():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS inventario (
-                    id         SERIAL PRIMARY KEY,
-                    nombre     VARCHAR(100) NOT NULL,
-                    categoria  VARCHAR(50)  DEFAULT 'Otros',
-                    cantidad   NUMERIC(10,2) DEFAULT 0,
-                    unidad     VARCHAR(30)  DEFAULT 'piezas',
-                    stock_min  NUMERIC(10,2) DEFAULT 5
-                )
-            """)
+            # La tabla inventario ya existe con sus columnas originales.
+            # Solo creamos recetas referenciando id_insumo.
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS recetas (
                     id              SERIAL PRIMARY KEY,
                     nombre_platillo VARCHAR(150) NOT NULL,
-                    id_ingrediente  INTEGER REFERENCES inventario(id) ON DELETE CASCADE,
+                    id_ingrediente  INTEGER REFERENCES inventario(id_insumo) ON DELETE CASCADE,
                     cantidad_usar   NUMERIC(10,2) NOT NULL
                 )
             """)
         conn.commit()
+        print("init_db OK")
     except Exception as e:
         conn.rollback()
         print(f"init_db error: {e}")
@@ -162,7 +155,7 @@ def get_pedidos_cocina(current_user):
     finally:
         conn.close()
 
-# ─── API: CHECKOUT con descuento automático de inventario ─────────────────────
+# ─── API: CHECKOUT con descuento automático ───────────────────────────────────
 @app.route('/api/checkout', methods=['POST'])
 @login_required
 def register_sale(current_user):
@@ -176,9 +169,7 @@ def register_sale(current_user):
         with conn.cursor() as cur:
             cur.execute("SELECT COALESCE(MAX(ticket_id), 0) AS max_id FROM formulario")
             nuevo_ticket = cur.fetchone()['max_id'] + 1
-
             for item in items:
-                # Guardar en formulario
                 cur.execute(
                     """INSERT INTO formulario
                        (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado, ticket_id)
@@ -186,21 +177,19 @@ def register_sale(current_user):
                     (cliente, "", item['name'], item['price'], item['qty'],
                      ahora, metodo, 'Pendiente', nuevo_ticket)
                 )
-
-                # Descontar ingredientes del inventario según receta
+                # Descontar ingredientes usando columnas reales de inventario
                 cur.execute("""
-                    SELECT r.id_ingrediente, r.cantidad_usar, i.cantidad
+                    SELECT r.id_ingrediente, r.cantidad_usar, i.cantidad_actual
                     FROM recetas r
-                    JOIN inventario i ON i.id = r.id_ingrediente
+                    JOIN inventario i ON i.id_insumo = r.id_ingrediente
                     WHERE lower(r.nombre_platillo) = lower(%s)
                 """, (item['name'],))
                 for ing in cur.fetchall():
-                    nuevo_stock = max(0, float(ing['cantidad']) - float(ing['cantidad_usar']) * item['qty'])
+                    nuevo_stock = max(0, float(ing['cantidad_actual']) - float(ing['cantidad_usar']) * item['qty'])
                     cur.execute(
-                        "UPDATE inventario SET cantidad = %s WHERE id = %s",
+                        "UPDATE inventario SET cantidad_actual=%s, fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s",
                         (nuevo_stock, ing['id_ingrediente'])
                     )
-
         conn.commit()
         return jsonify({'message': 'Venta registrada', 'ticket': nuevo_ticket}), 201
     except Exception as e:
@@ -243,11 +232,9 @@ def get_corte_reporte(current_user):
         with conn.cursor() as cur:
             cur.execute("SELECT CURRENT_DATE AS hoy")
             fecha_actual = cur.fetchone()['hoy']
-            cur.execute("""SELECT COALESCE(SUM(precio*cantidad),0) AS total
-                FROM formulario WHERE DATE(fecha)=CURRENT_DATE AND metodo_pago='Efectivo'""")
+            cur.execute("SELECT COALESCE(SUM(precio*cantidad),0) AS total FROM formulario WHERE DATE(fecha)=CURRENT_DATE AND metodo_pago='Efectivo'")
             efectivo = float(cur.fetchone()['total'])
-            cur.execute("""SELECT COALESCE(SUM(precio*cantidad),0) AS total
-                FROM formulario WHERE DATE(fecha)=CURRENT_DATE AND metodo_pago='Tarjeta'""")
+            cur.execute("SELECT COALESCE(SUM(precio*cantidad),0) AS total FROM formulario WHERE DATE(fecha)=CURRENT_DATE AND metodo_pago='Tarjeta'")
             tarjeta = float(cur.fetchone()['total'])
         return jsonify({'fecha_corte': str(fecha_actual), 'ventas_efectivo': efectivo,
                         'ventas_tarjeta': tarjeta, 'total_general': efectivo + tarjeta}), 200
@@ -279,8 +266,7 @@ def cobrar_ticket_id(current_user, tid):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("UPDATE formulario SET metodo_pago=%s WHERE ticket_id=%s",
-                        (data.get('metodo_pago'), tid))
+            cur.execute("UPDATE formulario SET metodo_pago=%s WHERE ticket_id=%s", (data.get('metodo_pago'), tid))
         conn.commit()
         return jsonify({'message': 'Cobro realizado'}), 200
     except Exception as e:
@@ -296,21 +282,27 @@ def obtener_notificaciones(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("""SELECT DISTINCT ticket_id, cliente FROM formulario
-                WHERE estado='Terminado' AND DATE(fecha)=CURRENT_DATE LIMIT 5""")
+            cur.execute("SELECT DISTINCT ticket_id, cliente FROM formulario WHERE estado='Terminado' AND DATE(fecha)=CURRENT_DATE LIMIT 5")
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
     finally:
         conn.close()
 
-# ─── API: INVENTARIO ──────────────────────────────────────────────────────────
+# ─── API: INVENTARIO (columnas reales) ───────────────────────────────────────
 @app.route('/api/inventario', methods=['GET'])
 @login_required
 def get_inventario(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM inventario ORDER BY categoria, nombre")
+            cur.execute("""
+                SELECT id_insumo AS id, nombre_insumo AS nombre, categoria,
+                       cantidad_actual AS cantidad, unidad_medida AS unidad,
+                       punto_reorden AS stock_min, ultimo_costo, proveedor_id,
+                       fecha_actualizacion
+                FROM inventario
+                ORDER BY categoria, nombre_insumo
+            """)
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
     except Exception as e:
@@ -325,10 +317,13 @@ def crear_ingrediente(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("""INSERT INTO inventario (nombre, categoria, cantidad, unidad, stock_min)
-                VALUES (%s,%s,%s,%s,%s) RETURNING *""",
-                (d['nombre'], d.get('categoria','Otros'), d['cantidad'],
-                 d.get('unidad','piezas'), d.get('stock_min',5)))
+            cur.execute("""
+                INSERT INTO inventario (nombre_insumo, categoria, cantidad_actual, unidad_medida, punto_reorden, fecha_actualizacion)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_DATE)
+                RETURNING id_insumo AS id, nombre_insumo AS nombre, categoria,
+                          cantidad_actual AS cantidad, unidad_medida AS unidad, punto_reorden AS stock_min
+            """, (d['nombre'], d.get('categoria','Otros'), d['cantidad'],
+                  d.get('unidad','piezas'), d.get('stock_min', 5)))
             row = dict(cur.fetchone())
         conn.commit()
         return jsonify(row), 201
@@ -345,11 +340,15 @@ def actualizar_ingrediente(current_user, iid):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("""UPDATE inventario
-                SET nombre=%s, categoria=%s, cantidad=%s, unidad=%s, stock_min=%s
-                WHERE id=%s RETURNING *""",
-                (d['nombre'], d.get('categoria','Otros'), d['cantidad'],
-                 d.get('unidad','piezas'), d.get('stock_min',5), iid))
+            cur.execute("""
+                UPDATE inventario
+                SET nombre_insumo=%s, categoria=%s, cantidad_actual=%s,
+                    unidad_medida=%s, punto_reorden=%s, fecha_actualizacion=CURRENT_DATE
+                WHERE id_insumo=%s
+                RETURNING id_insumo AS id, nombre_insumo AS nombre, categoria,
+                          cantidad_actual AS cantidad, unidad_medida AS unidad, punto_reorden AS stock_min
+            """, (d['nombre'], d.get('categoria','Otros'), d['cantidad'],
+                  d.get('unidad','piezas'), d.get('stock_min', 5), iid))
             row = cur.fetchone()
         conn.commit()
         return jsonify(dict(row) if row else {}), 200
@@ -365,7 +364,7 @@ def eliminar_ingrediente(current_user, iid):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM inventario WHERE id=%s", (iid,))
+            cur.execute("DELETE FROM inventario WHERE id_insumo=%s", (iid,))
         conn.commit()
         return jsonify({'message': 'Eliminado'}), 200
     except Exception as e:
@@ -384,14 +383,17 @@ def ajustar_stock(current_user, iid):
     try:
         with conn.cursor() as cur:
             if tipo == 'sumar':
-                cur.execute("UPDATE inventario SET cantidad=cantidad+%s WHERE id=%s RETURNING cantidad", (cant, iid))
+                cur.execute("""UPDATE inventario SET cantidad_actual=cantidad_actual+%s,
+                    fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual""", (cant, iid))
             elif tipo == 'restar':
-                cur.execute("UPDATE inventario SET cantidad=GREATEST(0,cantidad-%s) WHERE id=%s RETURNING cantidad", (cant, iid))
+                cur.execute("""UPDATE inventario SET cantidad_actual=GREATEST(0,cantidad_actual-%s),
+                    fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual""", (cant, iid))
             else:
-                cur.execute("UPDATE inventario SET cantidad=%s WHERE id=%s RETURNING cantidad", (cant, iid))
+                cur.execute("""UPDATE inventario SET cantidad_actual=%s,
+                    fecha_actualizacion=CURRENT_DATE WHERE id_insumo=%s RETURNING cantidad_actual""", (cant, iid))
             row = cur.fetchone()
         conn.commit()
-        return jsonify({'cantidad': float(row['cantidad'])}), 200
+        return jsonify({'cantidad': float(row['cantidad_actual'])}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({'error': str(e)}), 500
@@ -407,9 +409,9 @@ def get_recetas(current_user):
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT r.id, r.nombre_platillo, r.id_ingrediente,
-                       r.cantidad_usar, i.nombre AS ingrediente, i.unidad
-                FROM recetas r JOIN inventario i ON i.id = r.id_ingrediente
-                ORDER BY r.nombre_platillo, i.nombre
+                       r.cantidad_usar, i.nombre_insumo AS ingrediente, i.unidad_medida AS unidad
+                FROM recetas r JOIN inventario i ON i.id_insumo = r.id_ingrediente
+                ORDER BY r.nombre_platillo, i.nombre_insumo
             """)
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
@@ -425,9 +427,10 @@ def crear_receta(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("""INSERT INTO recetas (nombre_platillo, id_ingrediente, cantidad_usar)
-                VALUES (%s,%s,%s) RETURNING *""",
-                (d['nombre_platillo'], d['id_ingrediente'], d['cantidad_usar']))
+            cur.execute("""
+                INSERT INTO recetas (nombre_platillo, id_ingrediente, cantidad_usar)
+                VALUES (%s,%s,%s) RETURNING *
+            """, (d['nombre_platillo'], d['id_ingrediente'], d['cantidad_usar']))
             row = dict(cur.fetchone())
         conn.commit()
         return jsonify(row), 201
@@ -460,7 +463,10 @@ def debug_tablas():
         with conn.cursor() as cur:
             cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
             tablas = [r['table_name'] for r in cur.fetchall()]
-        return jsonify({'tablas': tablas}), 200
+            cur.execute("""SELECT column_name, data_type FROM information_schema.columns
+                WHERE table_schema='public' AND lower(table_name)='inventario' ORDER BY ordinal_position""")
+            cols = [dict(r) for r in cur.fetchall()]
+        return jsonify({'tablas': tablas, 'columnas_inventario': cols}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({'error': str(e)}), 500
