@@ -142,7 +142,6 @@ def register_sale(current_user):
     cliente = data.get('cliente', 'Mostrador')
     metodo  = data.get('metodo_pago', 'Pendiente')
     items   = data.get('items', [])
-    # UTC-7 = Culiacán/Mazatlán (sin horario de verano). Cambia a -6 en verano (abril-oct)
     tz_mx = datetime.timezone(datetime.timedelta(hours=-7))
     ahora = datetime.datetime.now(tz_mx).strftime('%Y-%m-%d %H:%M:%S')
     conn = get_db_connection()
@@ -212,7 +211,7 @@ def get_reporte_detallado(current_user):
                 SELECT ticket_id, cliente,
                     STRING_AGG(producto || ' (' || cantidad || ')', '<br>' ORDER BY producto) AS productos,
                     SUM(cantidad) AS total_items, SUM(precio * cantidad) AS gran_total,
-                    metodo_pago, TO_CHAR(MAX(fecha), 'YYYY-MM-DD HH24:MI:SS') AS fecha
+                    metodo_pago, TO_CHAR(MAX(fecha) AT TIME ZONE 'America/Mazatlan', 'YYYY-MM-DD HH24:MI:SS') AS fecha
                 FROM formulario
                 WHERE DATE(fecha AT TIME ZONE 'America/Mazatlan') = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date
                 GROUP BY ticket_id, cliente, metodo_pago
