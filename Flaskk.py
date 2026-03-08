@@ -147,7 +147,7 @@ def register_sale(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT COALESCE(MAX(ticket_id), 0) AS max_id FROM formulario")
+            cur.execute("SELECT GREATEST(COALESCE(MAX(ticket_id),0), COALESCE(MAX(id),0)) AS max_id FROM formulario")
             nuevo_ticket = cur.fetchone()['max_id'] + 1
 
             # Obtener columnas del menú dinámicamente
@@ -163,7 +163,7 @@ def register_sale(current_user):
                 # Registrar en formulario
                 cur.execute(
                     """INSERT INTO formulario
-                       (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado, ticket_id)
+                       (cliente, telefono, producto, precio, cantidad, "Fecha", metodo_pago, estado, ticket_id)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (cliente, "", item['name'], item['price'], item['qty'],
                      ahora, metodo, 'Pendiente', nuevo_ticket)
