@@ -126,7 +126,7 @@ def get_pedidos_cocina(current_user):
             cur.execute("""
                 SELECT ticket_id, cliente, producto, cantidad, estado
                 FROM formulario
-                WHERE estado = 'Pendiente' AND DATE(fecha) = CURRENT_DATE
+                WHERE estado = 'Pendiente' AND DATE(fecha AT TIME ZONE 'America/Mazatlan') = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date
                 ORDER BY ticket_id ASC
             """)
             rows = cur.fetchall()
@@ -142,7 +142,9 @@ def register_sale(current_user):
     cliente = data.get('cliente', 'Mostrador')
     metodo  = data.get('metodo_pago', 'Pendiente')
     items   = data.get('items', [])
-    ahora   = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # UTC-7 = Culiacán/Mazatlán (sin horario de verano). Cambia a -6 en verano (abril-oct)
+    tz_mx = datetime.timezone(datetime.timedelta(hours=-7))
+    ahora = datetime.datetime.now(tz_mx).strftime('%Y-%m-%d %H:%M:%S')
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -212,7 +214,7 @@ def get_reporte_detallado(current_user):
                     SUM(cantidad) AS total_items, SUM(precio * cantidad) AS gran_total,
                     metodo_pago, TO_CHAR(MAX(fecha), 'YYYY-MM-DD HH24:MI:SS') AS fecha
                 FROM formulario
-                WHERE DATE(fecha) = CURRENT_DATE
+                WHERE DATE(fecha AT TIME ZONE 'America/Mazatlan') = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date
                 GROUP BY ticket_id, cliente, metodo_pago
                 ORDER BY ticket_id DESC
             """)
@@ -230,11 +232,11 @@ def get_corte_reporte(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT CURRENT_DATE AS hoy")
+            cur.execute("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date AS hoy")
             fecha_actual = cur.fetchone()['hoy']
-            cur.execute("SELECT COALESCE(SUM(precio*cantidad),0) AS total FROM formulario WHERE DATE(fecha)=CURRENT_DATE AND metodo_pago='Efectivo'")
+            cur.execute("SELECT COALESCE(SUM(precio*cantidad),0) AS total FROM formulario WHERE DATE(fecha AT TIME ZONE 'America/Mazatlan')=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date AND metodo_pago='Efectivo'")
             efectivo = float(cur.fetchone()['total'])
-            cur.execute("SELECT COALESCE(SUM(precio*cantidad),0) AS total FROM formulario WHERE DATE(fecha)=CURRENT_DATE AND metodo_pago='Tarjeta'")
+            cur.execute("SELECT COALESCE(SUM(precio*cantidad),0) AS total FROM formulario WHERE DATE(fecha AT TIME ZONE 'America/Mazatlan')=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date AND metodo_pago='Tarjeta'")
             tarjeta = float(cur.fetchone()['total'])
         return jsonify({'fecha_corte': str(fecha_actual), 'ventas_efectivo': efectivo,
                         'ventas_tarjeta': tarjeta, 'total_general': efectivo + tarjeta}), 200
@@ -295,7 +297,7 @@ def obtener_notificaciones(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT DISTINCT ticket_id, cliente FROM formulario WHERE estado='Terminado' AND DATE(fecha)=CURRENT_DATE LIMIT 5")
+            cur.execute("SELECT DISTINCT ticket_id, cliente FROM formulario WHERE estado='Terminado' AND DATE(fecha AT TIME ZONE 'America/Mazatlan')=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date LIMIT 5")
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
     finally:
