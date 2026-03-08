@@ -363,7 +363,29 @@
         } catch (e) { console.error("Error en notificaciones", e); }
     }
 
+    // Sonido de notificación generado con Web Audio API (sin archivos externos)
+    function tocarSonidoAlerta() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const tiempos = [0, 0.15, 0.30];
+            const frecuencias = [880, 1100, 1320];
+            tiempos.forEach((t, i) => {
+                const osc  = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(frecuencias[i], ctx.currentTime + t);
+                gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.12);
+                osc.start(ctx.currentTime + t);
+                osc.stop(ctx.currentTime + t + 0.15);
+            });
+        } catch(e) { console.warn('Audio no disponible:', e); }
+    }
+
     function mostrarToast(nombre, ticketId) {
+        tocarSonidoAlerta();
         // Incrementar badge
         contadorNoLeidas++;
         actualizarBadge();
