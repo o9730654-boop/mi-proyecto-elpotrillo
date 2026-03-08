@@ -124,10 +124,10 @@ def get_pedidos_cocina(current_user):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT ticket_id, cliente, producto, cantidad, estado
+                SELECT id AS ticket_id, cliente, producto, cantidad, estado
                 FROM formulario
                 WHERE estado = 'Pendiente' AND DATE(fecha AT TIME ZONE 'America/Mazatlan') = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date
-                ORDER BY ticket_id ASC
+                ORDER BY id ASC
             """)
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
@@ -147,7 +147,7 @@ def register_sale(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT COALESCE(MAX(ticket_id), 0) AS max_id FROM formulario")
+            cur.execute("SELECT COALESCE(MAX(id), 0) AS max_id FROM formulario")
             nuevo_ticket = cur.fetchone()['max_id'] + 1
 
             # Obtener columnas del menú dinámicamente
@@ -163,7 +163,7 @@ def register_sale(current_user):
                 # Registrar en formulario
                 cur.execute(
                     """INSERT INTO formulario
-                       (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado, ticket_id)
+                       (cliente, telefono, producto, precio, cantidad, fecha, metodo_pago, estado, id)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (cliente, "", item['name'], item['price'], item['qty'],
                      ahora, metodo, 'Pendiente', nuevo_ticket)
@@ -208,14 +208,14 @@ def get_reporte_detallado(current_user):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT ticket_id, cliente,
+                SELECT id AS ticket_id, cliente,
                     STRING_AGG(producto || ' (' || cantidad || ')', '<br>' ORDER BY producto) AS productos,
                     SUM(cantidad) AS total_items, SUM(precio * cantidad) AS gran_total,
                     metodo_pago, TO_CHAR(MAX(fecha) AT TIME ZONE 'America/Mazatlan', 'YYYY-MM-DD HH24:MI:SS') AS fecha
                 FROM formulario
                 WHERE DATE(fecha AT TIME ZONE 'America/Mazatlan') = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date
-                GROUP BY ticket_id, cliente, metodo_pago
-                ORDER BY ticket_id DESC
+                GROUP BY id, cliente, metodo_pago
+                ORDER BY id DESC
             """)
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
@@ -259,7 +259,7 @@ def finalizar_ticket(current_user, tid):
             """)
             cols = [r['column_name'] for r in cur.fetchall()]
             estado_col   = next((c for c in cols if c.lower() == 'estado'),    'estado')
-            ticket_col   = next((c for c in cols if c.lower() == 'ticket_id'), 'ticket_id')
+            ticket_col   = next((c for c in cols if c.lower() in ('ticket_id', 'id')), 'id')
             cur.execute(
                 f'UPDATE formulario SET "{estado_col}"=\'Terminado\' WHERE "{ticket_col}"=%s',
                 (tid,)
@@ -280,7 +280,7 @@ def cobrar_ticket_id(current_user, tid):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("UPDATE formulario SET metodo_pago=%s WHERE ticket_id=%s", (data.get('metodo_pago'), tid))
+            cur.execute("UPDATE formulario SET metodo_pago=%s WHERE id=%s", (data.get('metodo_pago'), tid))
         conn.commit()
         return jsonify({'message': 'Cobro realizado'}), 200
     except Exception as e:
@@ -296,7 +296,7 @@ def obtener_notificaciones(current_user):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT DISTINCT ticket_id, cliente FROM formulario WHERE estado='Terminado' AND DATE(fecha AT TIME ZONE 'America/Mazatlan')=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date LIMIT 5")
+            cur.execute("SELECT DISTINCT id AS ticket_id, cliente FROM formulario WHERE estado='Terminado' AND DATE(fecha AT TIME ZONE 'America/Mazatlan')=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date LIMIT 5")
             rows = cur.fetchall()
         return jsonify([dict(r) for r in rows]), 200
     finally:
