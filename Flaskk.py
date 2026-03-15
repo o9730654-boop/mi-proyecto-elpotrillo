@@ -557,7 +557,28 @@ def debug_fechas():
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
-        
+
+@app.route('/api/debug/hoy', methods=['GET'])
+def debug_hoy():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # Ver todos los registros de hoy con cualquier comparación
+            cur.execute("""
+                SELECT ticket_id, cliente, fecha, estado, metodo_pago,
+                       CURRENT_DATE AS date_servidor,
+                       NOW() AS now_servidor
+                FROM formulario 
+                ORDER BY id DESC
+                LIMIT 10
+            """)
+            rows = [dict(r) for r in cur.fetchall()]
+        return jsonify([{k: str(v) for k, v in r.items()} for r in rows]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
