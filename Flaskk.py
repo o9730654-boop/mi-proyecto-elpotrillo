@@ -524,6 +524,40 @@ def debug_tablas():
 def verify_loader_io():
     return "loaderio-02da15920fabcf6b26e0709c27fafdd9"
 
+@app.route('/api/debug/fechas', methods=['GET'])
+def debug_fechas():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # Ver qué fecha/hora tiene el servidor
+            cur.execute("""
+                SELECT 
+                    NOW() AS servidor_utc,
+                    (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan') AS servidor_mazatlan,
+                    (CURRENT_TIMESTAMP AT TIME ZONE 'America/Mazatlan')::date AS fecha_mazatlan_hoy
+            """)
+            tiempo = dict(cur.fetchone())
+
+            # Ver las últimas 5 fechas guardadas en formulario
+            cur.execute("""
+                SELECT ticket_id, cliente, fecha, 
+                       DATE(fecha) AS solo_fecha,
+                       DATE(fecha AT TIME ZONE 'America/Mazatlan') AS fecha_mx
+                FROM formulario 
+                ORDER BY ticket_id DESC 
+                LIMIT 5
+            """)
+            ultimos = [dict(r) for r in cur.fetchall()]
+
+        return jsonify({
+            'tiempo_servidor': {k: str(v) for k, v in tiempo.items()},
+            'ultimos_registros': [{k: str(v) for k, v in r.items()} for r in ultimos]
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+        
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
